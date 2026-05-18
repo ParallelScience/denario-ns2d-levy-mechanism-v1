@@ -1,0 +1,95 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the tracer trajectories (`traj_x.npy`, `traj_y.npy`) and time array (`t_traj.npy`).",
+                "Unwrap the periodic trajectories (domain $L=2\\pi$) to compute continuous absolute displacements, and save these unwrapped trajectories to disk for use in later steps.",
+                "Compute the Mean Squared Displacement (MSD) as a function of lag time $\\tau$, fit a power law to extract the superdiffusive exponent $H$, and print the numerical value to verify $H \\approx 0.88$.",
+                "Compute displacement vectors $\\Delta \\mathbf{x}(\\tau)$ for a range of time lags $\\tau$.",
+                "For each $\\tau$, compute the empirical characteristic function $\\phi(k, \\tau)$ and estimate the stable index $\\alpha(\\tau)$ by fitting it to the model $\\exp(-|Dk|^\\alpha)$.",
+                "Compute Lagrangian velocities using finite differences of the unwrapped trajectories.",
+                "Compute the velocity increment PDF $\\delta v(\\tau) = v(t+\\tau) - v(t)$ for several lag values $\\tau$, test whether the tails are power-law distributed by fitting a tail exponent, and print the results.",
+                "Compute the Lagrangian velocity autocorrelation $R_v(\\tau)$.",
+                "Save the computed MSD, $H$, $\\alpha(\\tau)$, $R_v(\\tau)$, velocity increments, and displacement distributions for selected $\\tau$ to disk as `.npy` or `.npz` files."
+            ],
+            "sub_task": "Compute Lagrangian Displacement Statistics, Velocity Autocorrelation, and Velocity Increments",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Load the Eulerian vorticity fields (`vorticity_snapshots.npy`) and snapshot times (`snap_times.npy`).",
+                "Using spectral derivatives (FFT), compute the streamfunction, velocity components, and velocity gradients to calculate the Okubo-Weiss parameter $Q$ for each snapshot.",
+                "Define masks for vortex cores ($Q < 0$) and strain regions ($Q > 0$).",
+                "Print the fraction of the domain area classified as vortex-dominated ($Q < 0$) versus strain-dominated ($Q > 0$) for each of the 15 snapshots, and print the mean and standard deviation of the $Q$ threshold used.",
+                "Compute the isotropic energy spectrum $E(k)$ from the velocity fields.",
+                "Compute and print the spectral slope of $E(k)$ in both the large-scale (inverse cascade) and small-scale (enstrophy cascade) ranges separately, with explicit wavenumber ranges used for each fit.",
+                "Save the $E(k)$ spectrum, $Q$ fields, and the vortex/strain masks to disk."
+            ],
+            "sub_task": "Compute Eulerian Flow Characterization and Vortex Identification",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Load the wrapped trajectories, the unwrapped trajectories (from Step 1), the $Q$ fields (from Step 2), and the snapshot times.",
+                "Map each tracer's wrapped position to the Eulerian grid to extract the local $Q$ value at the 15 snapshot times.",
+                "Note and print the temporal resolution mismatch (snapshots are 40 time units apart, trajectories are 0.4 time units apart).",
+                "Use nearest-neighbor assignment in time to assign a continuous state to each tracer at each time step (Vortex if $Q < 0$, Strain if $Q > 0$).",
+                "Compute and print the fraction of total trajectory time-steps classified as Vortex versus Strain across all tracers, and compute the fraction of tracers that are predominantly (>50% of their time) in each state.",
+                "Compute conditional displacement PDFs and conditional MSD for the Vortex and Strain populations using the unwrapped trajectories.",
+                "Identify trapping events (consecutive time steps in the Vortex state) and extract their durations $\\tau_{trap}$.",
+                "Compute the jump size distribution $P(\\Delta x)$ during free-flight (Strain) periods separately from trapping (Vortex) periods, and fit power-law tails to both distributions.",
+                "Compute velocity increments $\\delta v(\\tau)$ and normalize them by the local RMS velocity of the respective region.",
+                "Identify large jumps (e.g., >3 standard deviations) and compute statistics on whether they correlate with exit events from vortex cores (transitions from Vortex to Strain).",
+                "Save all conditional statistics, trapping times, and jump statistics to disk."
+            ],
+            "sub_task": "Compute Tracer State Partitioning, Conditional Statistics, and Trapping Times",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Load the results saved in Steps 1 and 2.",
+                "Plot the displacement PDFs $P(\\Delta x, \\tau)$ for multiple lags, showing the transition from Gaussian to heavy-tailed behavior, and overlay a reference Gaussian curve on each displacement PDF panel.",
+                "Plot the estimated stable index $\\alpha(\\tau)$ versus $\\tau$.",
+                "Plot the Lagrangian velocity autocorrelation $R_v(\\tau)$ and check for power-law decay.",
+                "Plot the energy spectrum $E(k)$ to verify the inverse energy cascade, and overlay reference power-law slopes (e.g., $k^{-3}$ and $k^{-5/3}$) with explicit annotations of the fitted slopes.",
+                "Plot a representative snapshot of the vorticity field overlaid with contours of the Okubo-Weiss parameter $Q$.",
+                "Save all plots as high-resolution PNGs."
+            ],
+            "sub_task": "Plot Lagrangian Statistics, Velocity Autocorrelation, and Eulerian Fields",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Load the results saved in Step 3.",
+                "Plot the conditional displacement PDFs and conditional MSD, comparing the Vortex and Strain populations.",
+                "Plot the distribution of trapping times $P(\\tau_{trap})$ and perform a power-law fit to estimate the exponent $\\mu$.",
+                "Plot the normalized velocity increment PDFs for both regions.",
+                "Plot the jump size distribution $P(\\Delta x)$ for both Vortex-exit events and general Strain-region displacements on the same axes, with power-law fits overlaid.",
+                "Print detailed statistics regarding the correlation between large jumps and vortex exit events.",
+                "Save all plots as high-resolution PNGs."
+            ],
+            "sub_task": "Plot Conditional Statistics, Trapping Times, and Jump Distributions",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Review all generated plots and printed statistics from the previous steps.",
+                "Write a comprehensive Results section for a scientific paper.",
+                "Tabulate all key quantitative results ($H$ exponent, $\\alpha(\\tau)$ range, $\\mu$ exponent for trapping times, spectral slope, fraction of time in vortex vs. strain, fraction of large jumps coinciding with vortex exits) in a summary table within the Results section.",
+                "Discuss the robustness of the heavy tails and the evolution of $\\alpha(\\tau)$.",
+                "Interpret the Eulerian flow characteristics and the validity of the tracer partitioning.",
+                "Analyze the conditional MSD and displacement PDFs to determine if heavy tails are intrinsic to the strain field or a consequence of vortex trapping/ejection.",
+                "Discuss the trapping time distribution and its implications for the Continuous-Time Random Walk (CTRW) mechanism.",
+                "Conclude on the primary physical mechanism responsible for the anomalous diffusion (CTRW vs. direct Lévy vs. fractional Brownian motion)."
+            ],
+            "sub_task": "Mechanistic Synthesis and Final Report",
+            "sub_task_agent": "researcher",
+            "code_execution_timeout": 7200
+        }
+    ]
+}
