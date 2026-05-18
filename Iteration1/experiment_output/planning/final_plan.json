@@ -1,0 +1,108 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load tracer trajectories (traj_x.npy, traj_y.npy) and time arrays (t_traj.npy).",
+                "Unwrap the periodic trajectories (domain [0, 2π]) to compute continuous absolute displacements.",
+                "Compute the ensemble Mean Squared Displacement (MSD) and estimate the scaling exponent H.",
+                "Compute Lagrangian velocities using finite differences of the unwrapped trajectories.",
+                "Compute the Lagrangian velocity autocorrelation R_v(τ) and its integral time scale T_L.",
+                "Perform a velocity-subtraction check: subtract the ensemble mean velocity at each time step from tracer velocities, integrate to get mean-subtracted trajectories, and compute their MSD and H.",
+                "Compute displacement PDFs P(Δx, τ) for several lag times τ.",
+                "Compute single-tracer velocity increment PDFs δv(τ) = v(t+τ) - v(t) for several lag times τ, and test for power-law distributions.",
+                "Estimate the stable index α(τ) by computing the empirical characteristic function of displacements and fitting it by regressing log|φ(k)| vs log|k| at small wavenumbers. Save the resulting α(τ) values and uncertainties.",
+                "Save all computed metrics (MSD, H, R_v, T_L, PDFs, velocity increment PDFs, α) to disk in the designated database path."
+            ],
+            "sub_task": "Lagrangian Statistics and Ballistic Check (Computation)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the results from Step 1.",
+                "Create a multi-panel figure for MSD-related results: MSD vs time (original and mean-subtracted) with fitted H, Lagrangian velocity autocorrelation R_v(τ) vs τ, and estimated stable index α(τ) vs τ.",
+                "Create a multi-panel figure for PDF-related results: displacement PDFs for different lag times τ on a semi-log or log-log scale (including a Gaussian reference curve fitted to the core of the displacement PDF at each lag time to quantify non-Gaussianity), and velocity increment PDFs for several lag times.",
+                "Save the consolidated plots to the designated database path with descriptive filenames."
+            ],
+            "sub_task": "Lagrangian Statistics and Ballistic Check (Plotting)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load vorticity_snapshots.npy and snap_times.npy.",
+                "Compute the velocity fields (u, v) from the vorticity snapshots using pseudo-spectral methods (Fourier transforms).",
+                "Compute the Okubo-Weiss parameter Q for each snapshot to identify Vortex (Q < threshold) and Strain (Q > threshold) regions. Determine a robust threshold (e.g., based on the standard deviation of Q).",
+                "Count distinct coherent vortex structures (connected components where Q < threshold) and compute the total area fraction occupied by vortices at each snapshot. Print these statistics.",
+                "Compute the Eulerian energy spectrum E(k) from the velocity fields.",
+                "Save the Q fields, the chosen threshold, vortex statistics, and the energy spectrum E(k) to disk."
+            ],
+            "sub_task": "Eulerian Flow, Vortex Identification, and Spectral Analysis (Computation)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the results from Step 3.",
+                "Plot a representative snapshot of the vorticity field alongside its corresponding Okubo-Weiss Q field, highlighting the identified Vortex and Strain regions.",
+                "Plot the energy spectrum E(k) vs wavenumber k on a log-log scale. Add reference lines for k^-5/3 (enstrophy cascade) and k^-3 (inverse energy cascade) to identify the spectral slope.",
+                "Save all plots to the designated database path."
+            ],
+            "sub_task": "Eulerian Flow, Vortex Identification, and Spectral Analysis (Plotting)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load unwrapped trajectories, Lagrangian velocities, and the Q fields from previous steps.",
+                "Map tracers to the Eulerian field by interpolating the Q-mask (or using the nearest snapshot) to the tracer positions over time.",
+                "Calculate the Lagrangian velocity autocorrelation R_v(τ) separately for tracers currently in \"Vortex\" regions vs \"Strain\" regions.",
+                "Extract trapping durations τ_trap. Use vortex-residence (continuous time spent in Q < threshold regions) as the primary criterion for trapping events, and displacement-threshold (net displacement below a threshold over a time window) as a secondary cross-check. Save both distributions.",
+                "Identify \"large jumps\" (e.g., displacements > 3σ of local strain velocity variance) during free flight periods.",
+                "Compute the fraction of large-jump events (displacements > 3σ) occurring within 1-3 time steps after a tracer exits a vortex region. Print and save this correlation fraction.",
+                "Save the conditional R_v(τ), trapping time distributions, jump size distribution, and correlation fraction to disk."
+            ],
+            "sub_task": "Conditional Lagrangian Analysis & Trapping/Jump Statistics (Computation)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the results from Step 5.",
+                "Plot the conditional Lagrangian velocity autocorrelation R_v(τ) for Vortex vs Strain populations.",
+                "Plot the distribution of trapping times P(τ_trap) (for both criteria) on a log-log scale and fit a power-law exponent μ.",
+                "Plot the distribution of jump sizes.",
+                "Save all plots to the designated database path."
+            ],
+            "sub_task": "Conditional Lagrangian Analysis & Trapping/Jump Statistics (Plotting)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the original Lagrangian velocity series and integral time scale T_L.",
+                "Construct two types of surrogate velocity series: (1) Phase-randomized surrogates: phase-randomize the Fourier transform of the original velocities (destroys temporal memory while preserving the single-time velocity PDF). (2) Block-shuffle surrogates: shuffle the velocity time series in blocks of size equal to the integral time scale T_L (preserves short-range correlations but destroys long-range memory).",
+                "Integrate both types of surrogate velocities to create surrogate trajectories.",
+                "Compute the MSD and displacement PDFs for both sets of surrogate trajectories.",
+                "Save the surrogate MSDs and PDFs to disk."
+            ],
+            "sub_task": "Surrogate Trajectory Testing (Computation)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the surrogate results and original results.",
+                "Plot the surrogate MSDs (both types) vs original MSD on a log-log scale.",
+                "Plot the surrogate displacement PDFs (both types) vs original displacement PDFs.",
+                "Save the plots to the designated database path."
+            ],
+            "sub_task": "Surrogate Trajectory Testing (Plotting)",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Review all generated plots, saved statistics, and printed outputs from the previous steps.",
+                "Write a comprehensive Results section for a scientific paper.",
+                "Interpret the findings from the Lagrangian statistics, Eulerian spectral analysis, conditional analysis, and surrogate testing.",
+                "Explicitly compare the three candidate mechanisms using the quantitative outputs: (1) the power-law exponent μ of the trapping time distribution and its relation to the observed H via the CTRW prediction H = 1 - μ/2, (2) the tail index of the velocity increment PDFs and its relation to α, and (3) the ratio of the surrogate MSD exponents to the original H. Rank the mechanisms by their explanatory power.",
+                "Conclusively answer the key question: which physical process (CTRW/trapping, heavy-tailed velocity increments/Lévy, or long memory/fBm) most directly causes the heavy tails and superdiffusion in this 2D turbulence dataset."
+            ],
+            "sub_task": "Mechanistic Synthesis and Model Classification",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}

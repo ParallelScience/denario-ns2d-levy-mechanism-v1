@@ -1,0 +1,7 @@
+The failure to observe a genuine Lévy-flight or CTRW regime (specifically the inability to reach the asymptotic diffusion limit and the lack of scale-free trapping times) is directly attributable to constraints in the dataset description:
+
+1. **Limited Simulation Time (T=600)**: The analysis identifies that the Lagrangian integral time scale $T_L \approx 76$ is a significant fraction of the total simulation time $T=600$. The dataset is too short to reach the asymptotic diffusive limit ($T \gg T_L$), causing the observed superdiffusion to be a transient, pre-asymptotic ballistic crossover rather than a steady-state anomalous diffusion process.
+
+2. **Forcing Scale and Domain Size**: The stochastic forcing at large scales ($k \in [3, 6]$) in a relatively small $256 \times 256$ domain promotes the formation of large-scale, long-lived coherent vortices. This configuration forces the system into a regime where large-scale correlations dominate the tracer dynamics, preventing the emergence of the scale-free statistics (e.g., $\mu < 2$ or $\alpha < 2$) required for the hypothesized Lévy-flight or CTRW mechanisms.
+
+These constraints explain why the research plan failed to identify a stable anomalous diffusion mechanism: the dataset lacks the temporal duration and the turbulent scale separation necessary to transition from the observed transient ballistic motion to the hypothesized asymptotic anomalous diffusion regime.
