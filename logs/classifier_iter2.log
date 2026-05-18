@@ -1,0 +1,7 @@
+Classifier: Step 1 — Determining archive...
+  Archive: physics — The paper focuses on fluid dynamics and turbulence, which are core topics within the physics archive.
+Classifier: Step 2 — Determining subcategory within 'physics'...
+  Primary: physics.flu-dyn
+  Secondary: physics.comp-ph, nlin.CD
+  Justification: The paper focuses on Lagrangian particle transport in two-dimensional turbulence, which is a core topic in fluid dynamics. The use of direct numerical simulations (DNS) and computational analysis of tracer trajectories justifies the inclusion of computational physics, while the study of chaotic dynamics and transport scaling relates to nonlinear dynamics.
+Classification completed in 0 min 1 sec. Cost: $0.0000

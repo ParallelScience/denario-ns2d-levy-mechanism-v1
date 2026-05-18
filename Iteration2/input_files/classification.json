@@ -1,0 +1,8 @@
+{
+  "primary_category": "physics.flu-dyn",
+  "secondary_categories": [
+    "physics.comp-ph",
+    "nlin.CD"
+  ],
+  "justification": "The paper focuses on Lagrangian particle transport in two-dimensional turbulence, which is a core topic in fluid dynamics. The use of direct numerical simulations (DNS) and computational analysis of tracer trajectories justifies the inclusion of computational physics, while the study of chaotic dynamics and transport scaling relates to nonlinear dynamics."
+}
