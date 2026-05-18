@@ -1,0 +1,200 @@
+
+###### PROMPT BEGINS ########
+Human: You are provided with:
+- a description of the data
+- an idea
+- research plan to carry out the idea.
+
+Your task is to provide suggestions on how to improve the plan.
+Take into account and potential feedback (if any).
+If the plan is already good enough, do not give suggestions to improve it. If this is not first iteration, you will also be provided with the previous research plan along with some feedback on it. If this is the case, take into account the feedback provided when designing the new research plan. It is good to have a detailed plan, but not to have an overly complicated plan. If you dont have suggestions, just say that you dont have further suggestions. The idea should remain the same. No need to add code to the research plan, as another agent will write code given the research plan.
+
+Data description:
+## Task
+
+Discover the *mechanistic* physical explanation for why Lagrangian tracers in 2D turbulence exhibit anomalous diffusion (superdiffusion / Lévy-flight-like heavy tails in displacement PDFs). The goal is not to verify a scaling relation — it is to identify **what physical structures or processes in the flow are responsible** for the heavy tails.
+
+## Scientific Background
+
+In 2D turbulence, Lagrangian tracers are known to exhibit superdiffusive transport (MSD ~ t^{2H}, H > 0.5). The displacement PDF develops heavy tails that deviate from Gaussian. The fractional diffusion equation ∂_t P = -D_α (-Δ)^{α/2} P with α < 2 is one effective description. The question is: **what physical mechanism in the Navier-Stokes flow produces this operator?**
+
+Candidate mechanisms from the literature:
+1. **Coherent vortex trapping + ejection**: tracers get trapped in vortex cores (slow, confined motion) and then abruptly ejected into the background straining field, producing long waiting times and large jumps — a Continuous-Time Random Walk (CTRW) picture.
+2. **Spatial intermittency of the strain field**: rare regions of extreme strain produce large sudden displacements.
+3. **Lévy flights from the velocity spectrum**: if the energy spectrum has a power-law tail in k, the velocity increments (which drive tracer displacements over short times) have power-law tails.
+4. **Inverse cascade clustering**: in 2D turbulence, energy cascades to large scales, creating large-scale correlated flows that trap tracers for long periods.
+
+## Dataset
+
+A 2D incompressible Navier-Stokes simulation was run on a 256×256 periodic domain (L=2π) using:
+- Pseudo-spectral Poisson solver for the streamfunction
+- Adams-Bashforth 2nd order time integration, dt=0.02
+- Stochastic large-scale forcing in wavenumber band k ∈ [3,6]
+- Kinematic viscosity ν = 0.002
+- Total production time T = 600 (30000 steps)
+- 8000 Lagrangian tracers seeded uniformly after 1000-step spin-up
+- MSD exponent H ≈ 0.88 (clearly superdiffusive)
+
+### Files (all absolute paths)
+
+- `/home/node/work/projects/ns2d_levy_v1/data/traj_x.npy`  
+  Shape: (1500, 8000), dtype: float32  
+  Tracer x-positions at each saved time step. Positions are in [0, 2π] (periodic domain).
+
+- `/home/node/work/projects/ns2d_levy_v1/data/traj_y.npy`  
+  Shape: (1500, 8000), dtype: float32  
+  Tracer y-positions at each saved time step.
+
+- `/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy`  
+  Shape: (1500,), dtype: float32  
+  Time values corresponding to each snapshot row in traj_x/traj_y. Range: [0, 600], spacing = 0.4.
+
+- `/home/node/work/projects/ns2d_levy_v1/data/vorticity_snapshots.npy`  
+  Shape: (15, 256, 256), dtype: float32  
+  Eulerian vorticity field ω(x,y) at 15 times (every 2000 production steps × dt=0.02 × 20 = t=40 apart).
+
+- `/home/node/work/projects/ns2d_levy_v1/data/snap_times.npy`  
+  Shape: (15,), dtype: float64  
+  Times corresponding to each vorticity snapshot.
+
+- `/home/node/work/projects/ns2d_levy_v1/data/meta.json`  
+  Simulation metadata (N, L, nu, dt, force_band, etc.)
+
+- `/home/node/work/projects/ns2d_levy_v1/data/generate_ns2d.py`  
+  Python script that generated the data (pseudo-spectral NS solver).
+
+## Suggested Analyses (ordered by priority)
+
+1. **Displacement PDF tails**: Compute displacement distributions P(Δx, τ) at multiple lags τ. Use characteristic function fitting (NOT MSD alone — MSD is undefined for ideal Lévy with α<2) to estimate the stable index α(τ). Show the evolution from Gaussian (short τ) toward heavy-tailed (long τ).
+
+2. **Velocity increment PDF**: Compute single-tracer velocity increments δv(τ) = v(t+τ) - v(t). If these are power-law distributed, this is the direct velocity-field mechanism for heavy tails.
+
+3. **Lagrangian velocity autocorrelation**: Compute R_v(τ). Long tails in R_v(τ) (slow decorrelation) produce anomalous diffusion via the Green-Kubo relation: MSD ~ ∫_0^T ∫_0^T R_v(|t-s|) dt ds.
+
+4. **Trapping time analysis**: Define a "trapping event" as a period during which a tracer's net displacement falls below a threshold. Measure the distribution of trapping times P(τ_trap). A power-law P(τ_trap) ~ τ^{-μ} with μ < 2 is the CTRW signature of Lévy flights.
+
+5. **Jump size distribution**: Complementary to trapping — measure the distribution of displacement sizes during "free flight" periods. Power-law tails here indicate Lévy flights in the classic sense.
+
+6. **Vorticity field structure**: Using the vorticity snapshots, compute the PDF of local vorticity ω. Count coherent vortex structures (|ω| > threshold). Test whether tracers near strong vortices have different transport statistics than tracers in the background straining regions.
+
+7. **Conditional MSD**: Split tracers into those that spend time near coherent vortices vs. those in strain-dominated regions (if vortex centres can be identified from vorticity snapshots that overlap with tracer positions). Compare their displacement PDFs.
+
+8. **Energy spectrum**: From the vorticity snapshots, compute E(k) = (1/2)|û(k)|². Check for a k^{-5/3} (enstrophy cascade, small scales) or k^{-3} (inverse energy cascade, large scales) spectrum. The spectral index determines the Eulerian roughness ξ and the theoretical α = 2/ξ prediction.
+
+## Key Question for the Analysis
+
+After all analyses are complete, the report should answer: **which physical process most directly causes the heavy tails?** Options:
+- Long trapping near coherent vortices (CTRW mechanism)
+- Heavy-tailed velocity increments (direct Lévy mechanism)
+- Long memory in Lagrangian velocity (fractional Brownian motion mechanism)
+- A combination, and if so, which dominates
+
+The "effective physical theory" is: whichever of these mechanisms dominates defines the correct stochastic model (CTRW with power-law waiting times, Lévy stable process, fractional Brownian motion, etc.).
+
+
+Idea:
+**Title: Distinguishing Spectral Cascade versus Spatial Intermittency as Drivers of Superdiffusion**
+
+This study determines if the observed $H \approx 0.88$ superdiffusion arises from the large-scale correlated flows of the inverse energy cascade or from intermittent strain-field regions. We will first compute the Eulerian energy spectrum $E(k)$ from the 15 vorticity snapshots to identify the spectral index within the $k \in [3, 6]$ forcing range and the inverse cascade regime, using the relation between Eulerian roughness $\xi$ and the Lagrangian velocity autocorrelation $R_v(\tau)$ to predict the theoretical stable index $\alpha$. To test for spatial intermittency, we will compute the cross-correlation between the local Eulerian vorticity $\omega(x, y)$—sampled at the 15 available time points—and the instantaneous Lagrangian acceleration $a(t) = dv/dt$ of tracers currently occupying those coordinates. By comparing the Lagrangian velocity autocorrelation $R_v(\tau)$—calculated at high frequency ($dt=0.4$)—against the spectral energy distribution, we will isolate whether the heavy tails in displacement PDFs are a consequence of the long-memory dynamics inherent to the inverse cascade ($k^{-3}$ spectrum) or impulsive jumps induced by localized high-strain regions. This approach replaces invalid temporal trapping metrics with a rigorous spectral-Lagrangian mapping, providing a definitive physical basis for the anomalous diffusion observed in the tracer ensemble.
+
+Research plan:
+1. **Running Hurst Exponent Analysis**
+   - Compute the Mean Squared Displacement (MSD) for the full ensemble over the entire time range $t \in [0, 600]$.
+   - Calculate the running Hurst exponent $H(t) = \frac{d \log \text{MSD}(t)}{d \log t}$ using a sliding window or local polynomial regression on the log-log plot.
+   - Determine if $H(t)$ is monotonically decreasing toward $0.5$ or if it plateaus at a value $> 0.5$, providing a definitive answer on whether the observed superdiffusion is a transient crossover or a persistent regime.
+
+2. **Refined Eulerian Partitioning**
+   - Compute the Okubo-Weiss parameter $Q = s^2 - \omega^2$ for all 15 vorticity snapshots.
+   - Establish a robust threshold $Q_{thresh}$ to partition the domain into "Vortex" ($Q < Q_{thresh}$) and "Strain" ($Q > Q_{thresh}$) regions.
+   - Map each tracer to these regions at each time step using linear temporal and spatial interpolation of the $Q$-field.
+
+3. **Conditional MSD and "Highway" Identification**
+   - Define two sub-populations: "Vortex-dominated" (tracers spending $>80\%$ of their time in $Q < Q_{thresh}$) and "Strain-dominated" (tracers spending $>80\%$ of their time in $Q > Q_{thresh}$).
+   - Calculate the MSD separately for these two populations.
+   - Compare the respective Hurst exponents $H_{vortex}$ and $H_{strain}$ to test the hypothesis that the strain-dominated regions act as "highways" for ballistic-like transport ($H \approx 1$).
+
+4. **Lagrangian Velocity Autocorrelation of Sub-populations**
+   - Compute the Lagrangian velocity autocorrelation $R_v(\tau)$ for the "Vortex" and "Strain" populations independently.
+   - Analyze the decay rates of $R_v(\tau)$ for both groups to quantify the persistence of velocity correlations in the strain field versus the rapid decorrelation within vortex cores.
+
+5. **Restorative Correlation Analysis**
+   - Re-examine the surrogate trajectory data (from previous phase-randomization tests) to quantify the impact of velocity sequence ordering.
+   - Calculate the difference in MSD between the original trajectories and the phase-randomized surrogates to isolate the specific contribution of "restorative" (anti-persistent) temporal correlations in the flow.
+
+6. **Mechanistic Synthesis**
+   - Combine the results from the running Hurst exponent, conditional MSD, and correlation analysis to construct a weighted-average model of the global transport.
+   - Formulate the final physical explanation: demonstrate that the global $H \approx 0.85$ is the result of the competition between vortex-trapping (suppressing diffusion) and strain-field highways (promoting ballistic transport).
+   - Conclude by characterizing the transport as a non-Lévy, correlation-driven process dominated by the spatial topology of the inverse cascade.
+
+Previous research plan:
+1. **Refinement of Lagrangian Statistics and Ballistic Check**
+   - Re-calculate the Mean Squared Displacement (MSD) and the scaling exponent $H$ for the full ensemble.
+   - Compute the Lagrangian velocity autocorrelation $R_v(\tau)$ and its integral $T_L = \int_0^\infty R_v(\tau) d\tau$. Compare $T_L$ to the total simulation time $T=600$ to quantify the impact of large-scale "conveyor belt" structures.
+   - Perform a velocity-subtraction check: subtract the mean flow (large-scale vortex structures) from tracer velocities to determine if $H$ drops, isolating the contribution of coherent structures versus local turbulent diffusion.
+   - Compute the displacement PDF $P(\Delta x, \tau)$ and fit the characteristic function to estimate the stable index $\alpha(\tau)$, confirming the transition from Gaussian to heavy-tailed behavior.
+
+2. **Robust Eulerian Flow and Vortex Identification**
+   - Compute the Okubo-Weiss parameter $Q = s^2 - \omega^2$ using the 15 vorticity snapshots.
+   - Define "Vortex" ($Q < Q_{thresh}$) and "Strain" ($Q > Q_{thresh}$) regions.
+   - Perform a sensitivity analysis on $Q_{thresh}$ and generate a stability plot for the trapping time exponent $\mu$ as a function of $Q_{thresh}$ to ensure the partitioning is robust.
+
+3. **Conditional Lagrangian Analysis**
+   - Map tracers to the Eulerian field using linear temporal interpolation of the $Q$-mask.
+   - Calculate the Lagrangian velocity autocorrelation $R_v(\tau)$ separately for the "Vortex" and "Strain" populations.
+   - Compare the decorrelation rates between populations to identify if the strain population exhibits persistent (fBm-like) behavior versus rapid decorrelation in vortex cores.
+
+4. **Surrogate Trajectory Testing**
+   - Construct Markovian surrogate trajectories by shuffling the sequence of "Vortex" and "Strain" states while preserving the transition matrix $P(S_{t+1}|S_t)$ and the residence time distribution.
+   - Compare the MSD and displacement PDF tails of the original trajectories against these Markovian surrogates.
+   - If heavy tails persist in the surrogates, conclude the mechanism is increment-driven (velocity PDF); if they vanish, conclude it is correlation-driven (temporal sequence).
+
+5. **Trapping Time and Jump Statistics**
+   - Extract trapping durations $\tau_{trap}$ within vortex cores and estimate the power-law exponent $\mu$ via maximum likelihood estimation.
+   - Identify "large jumps" (displacements $> 3\sigma$) and define the threshold relative to the *local* velocity variance of the strain field to avoid bias from high-energy vortex regions.
+   - Correlate the occurrence of large jumps with exit events from vortex cores to verify the CTRW "trapping and ejection" hypothesis.
+
+6. **Spectral Analysis and Contextualization**
+   - Compute the energy spectrum $E(k)$ from vorticity snapshots to quantify the spectral slope and identify the forcing band $k \in [3, 6]$.
+   - Contextualize the observed $H \approx 0.88$ by relating the integral time scale $T_L$ to the energy injection scale, confirming whether the superdiffusion is dominated by the inverse cascade's large-scale correlated flows.
+
+7. **Mechanistic Synthesis and Model Classification**
+   - Integrate findings from the conditional $R_v(\tau)$ analysis, surrogate tests, and trapping statistics.
+   - Classify the transport mechanism as: (a) CTRW (trapping-dominated), (b) fBm (strain-field correlation-dominated), or (c) a dual-mechanism.
+   - Finalize the physical explanation by mapping the dominant statistical signature to the corresponding stochastic process (CTRW, Lévy stable process, or fractional Brownian motion).
+
+Feedback on previous research plan:
+The current analysis is a significant step forward, successfully debunking the "Lévy flight" and "CTRW" hypotheses for this specific dataset. By demonstrating that $\alpha \approx 2$, $\mu > 2$, and that temporal memory actually suppresses superdiffusion, you have effectively shifted the scientific conclusion from "anomalous diffusion" to "pre-asymptotic ballistic crossover."
+
+**Critique of the current state:**
+1. **The "Pre-asymptotic" Claim:** You conclude that $H \approx 0.85$ is a finite-time crossover. However, you have not yet rigorously demonstrated that $H$ decays toward $0.5$ as $T \to \infty$. If $H$ remains stable at $0.85$ for the duration of your simulation, calling it "pre-asymptotic" is an assumption, not a result.
+2. **The Surrogate Test Interpretation:** The increase in $H$ upon phase randomization is a powerful finding. It suggests that the velocity field contains "anti-persistent" or "restorative" correlations that keep tracers from wandering as far as they would in a memory-less random walk with the same velocity PDF. This is a crucial insight that deserves more focus than just being a "failed" test for fBm.
+3. **Missed Opportunity in Vortex Dynamics:** You identified that vortex-trapped tracers have rapid decorrelation while strain-dominated tracers have long-range correlations. This implies the "highway" mechanism is the primary driver of the observed $H > 0.5$. You have the data to quantify this: compare the MSD of the "Strain" population alone vs. the "Vortex" population.
+
+**Actionable Feedback for Future Iterations:**
+1. **Demonstrate the Crossover:** Do not just claim it is pre-asymptotic. Compute the *running* Hurst exponent $H(t) = \frac{d \log \text{MSD}}{d \log t}$ over the interval $t \in [0, 600]$. If $H(t)$ is monotonically decreasing toward $0.5$, your conclusion is robust. If $H(t)$ is flat, you have discovered a persistent non-Gaussian regime that is not a standard Lévy flight, which is a more interesting result.
+2. **Isolate the "Highway" Contribution:** Since the strain-dominated tracers are the likely source of the $H \approx 0.85$ behavior, perform a "conditional MSD" calculation. Calculate the MSD for tracers that spend $>80\%$ of their time in the strain-dominated regions ($Q > Q_{thresh}$). If this sub-population exhibits $H \approx 1$ (ballistic), you have identified the physical mechanism: the inverse cascade creates long-lived strain "highways" that dominate the global transport statistics.
+3. **Refine the "Memory" Narrative:** Reframe the surrogate test result. Instead of saying "fBm is not supported," state that "the flow exhibits restorative temporal correlations that prevent ballistic divergence." This is a more precise physical description of the Lagrangian dynamics in 2D turbulence.
+4. **Stop searching for Lévy flights:** You have sufficient evidence to reject the Lévy/CTRW hypothesis for this simulation. Future work should pivot entirely to characterizing the "highway" transport in the strain field. Do not waste further resources on $\alpha$-stable fitting or trapping time distributions.
+
+**Summary for the next iteration:** Focus on the "Strain-dominated highway" hypothesis. If the strain-field tracers show $H \approx 1$ and the vortex-trapped tracers show $H \approx 0$, the global $H \approx 0.85$ is simply a weighted average of these two distinct physical processes. This is a complete, physically grounded explanation.
+
+
+Respond in this format:
+
+\\begin{SUGGESTIONS}
+<SUGGESTIONS>
+\\end{SUGGESTIONS}
+
+In <SUGGESTIONS> put the suggestions to improve the plan.
+
+###### PROMPT ENDS ########
+
+###### RESPONSE [model: gemini-3.1-flash-lite-preview] ########
+\begin{SUGGESTIONS}
+1. **Refine the "Highway" Quantification**: In step 3, ensure the "Strain-dominated" population is compared against a "Vortex-dominated" population that is *equally* sized (e.g., by selecting the top/bottom 20% of tracers based on time spent in $Q$ regions). This ensures that the difference in MSD is due to the physical environment rather than sample size bias.
+2. **Clarify the "Restorative" Mechanism**: In step 5, explicitly link the "restorative" correlations to the vortex-trapping. The hypothesis is that vortex trapping acts as a "restorative" force (keeping tracers near a center), while the strain field acts as a "ballistic" force. Quantifying the MSD of the *full* ensemble vs. the *strain-only* ensemble will allow you to calculate the "suppression factor" caused by the vortices.
+3. **Temporal Resolution of the Crossover**: Since you are calculating $H(t)$ in step 1, ensure the sliding window is wide enough to avoid noise but narrow enough to capture the transition. Given $T=600$, a window of $\Delta t \approx 100$ is recommended.
+4. **Remove Redundant Steps**: You have already been advised to stop searching for Lévy flights. Ensure that the "Mechanistic Synthesis" (step 6) focuses exclusively on the "Vortex-Strain Competition" model rather than revisiting Lévy/CTRW metrics.
+5. **Validation of the "Highway"**: To be truly rigorous, verify that the "Strain-dominated" tracers are indeed moving along the large-scale structures identified by the inverse cascade. You can do this by visualizing the trajectories of the "Strain-dominated" sub-population overlaid on a single vorticity snapshot; they should align with the "filaments" between vortices.
+\end{SUGGESTIONS}
+
