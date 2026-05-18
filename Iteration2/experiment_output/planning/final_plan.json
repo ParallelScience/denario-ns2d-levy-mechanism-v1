@@ -1,0 +1,106 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load traj_x.npy, traj_y.npy, and t_traj.npy.",
+                "Unwrap the trajectories to remove artificial jumps caused by the periodic boundaries (domain is [0, 2pi]).",
+                "Compute the ensemble Mean Squared Displacement (MSD) over time.",
+                "Calculate the running Hurst exponent H(t) = 1/2 * d log MSD(t) / d log t using a sliding window or finite differences.",
+                "Compute displacement distributions P(delta x, tau) at several lag times tau (e.g., short, medium, long).",
+                "Fit the displacement distributions to assess deviation from Gaussian (e.g., compute excess kurtosis).",
+                "Print key statistics (e.g., final MSD, average H(t) in the late regime, excess kurtosis at different lags).",
+                "Save the unwrapped trajectories, MSD, H(t) arrays, and displacement arrays to disk."
+            ],
+            "sub_task": "Unwrap trajectories, compute ensemble MSD, Hurst exponent, and displacement PDF tails.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load vorticity_snapshots.npy.",
+                "Compute the 2D isotropic energy spectrum E(k) from the vorticity fields using FFT, and average it over all 15 snapshots.",
+                "Fit a power-law slope to E(k) in the inertial range (inverse cascade regime k < 3 and enstrophy cascade regime k > 6).",
+                "Compute the theoretical prediction alpha = 2/xi linking the spectral roughness exponent xi to the Levy stable index alpha.",
+                "Compute the velocity components and their spatial derivatives using spectral methods.",
+                "Calculate the strain rate tensor magnitude s^2 and the Okubo-Weiss parameter Q = s^2 - omega^2 for all snapshots.",
+                "Print key statistics (e.g., spectral peaks, fitted spectral indices, theoretical alpha, mean/std of Q).",
+                "Save the averaged E(k) and the Q fields to disk."
+            ],
+            "sub_task": "Compute Eulerian energy spectrum, Okubo-Weiss parameter, and fit spectral indices.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the unwrapped trajectories, Q fields, t_traj, and snap_times.",
+                "Wrap the trajectories back to [0, 2pi] strictly for spatial interpolation.",
+                "Interpolate the Q field in space and time to each tracer's position at each time step. Handle the periodic spatial boundaries appropriately.",
+                "Classify each tracer's state at each time step: \"Strain\" if Q > 0, \"Vortex\" if Q < 0.",
+                "Calculate the percentage of time each tracer spends in the Strain region over the simulation.",
+                "Extract trapping event durations (consecutive time steps in the Vortex state) and free-flight jump sizes (net displacement during consecutive Strain-state periods).",
+                "Print summary statistics of the Strain percentages, trapping durations, and jump sizes.",
+                "Save the interpolated Q values, Strain percentages, trapping event durations, and jump sizes to disk."
+            ],
+            "sub_task": "Interpolate Okubo-Weiss parameter, classify states, and extract trapping time and jump size distributions.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the unwrapped trajectories, t_traj, and the Strain percentages.",
+                "Define sub-populations based on the Strain percentages (e.g., Strain-dominated for >70%, Vortex-dominated for <30%).",
+                "Compute the MSD and running Hurst exponent H(t) for these sub-populations independently.",
+                "Compute the Lagrangian velocities vx(t), vy(t) for all tracers using finite differences of the unwrapped trajectories.",
+                "Compute the Lagrangian velocity autocorrelation function Rv(tau) for the full ensemble and the sub-populations.",
+                "Compute the PDF of Lagrangian velocity increments delta v(tau) = v(t+tau) - v(t) at multiple lags tau for the full ensemble and sub-populations, and fit the tails to test the Levy flights from velocity spectrum mechanism.",
+                "Print key statistics (e.g., H(t) for sub-populations, decorrelation times, velocity increment tail exponents).",
+                "Save the sub-population MSDs, H(t), Lagrangian velocities, Rv(tau) arrays, and velocity increment PDFs to disk."
+            ],
+            "sub_task": "Compute sub-population MSDs, Lagrangian velocity autocorrelation, and velocity increment PDFs.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load the trapping event durations, jump sizes, Lagrangian velocities, and t_traj.",
+                "Fit power-law exponents mu to the trapping time and jump size distributions (using log-log regression or maximum likelihood estimation on the tail).",
+                "Print the fitted exponents mu and compare to the CTRW threshold mu < 2.",
+                "Generate phase-randomized surrogate velocity time series for each tracer using FFT, randomizing the phases (preserving conjugate symmetry for real signals), and IFFT.",
+                "Integrate the surrogate velocities over time to generate surrogate trajectories.",
+                "Compute the ensemble MSD of the surrogate trajectories.",
+                "Print the final MSD and effective Hurst exponent of the surrogate trajectories.",
+                "Save the fitted exponents and surrogate MSD to disk."
+            ],
+            "sub_task": "Fit power-law exponents to trapping/jump distributions and perform phase-randomized surrogate test.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Load all computed data from Steps 1 to 5.",
+                "Use try-except blocks for each plot to ensure all possible plots are generated even if one fails.",
+                "Plot 1: Ensemble MSD vs time (log-log) and H(t) vs time (linear-log).",
+                "Plot 2: Eulerian Energy Spectrum E(k) vs k (log-log) with reference lines for k^-5/3 and k^-3, and fitted slopes.",
+                "Plot 3: Histogram of the percentage of time tracers spend in Strain regions.",
+                "Plot 4: Comparison of MSD and H(t) for the full ensemble, Strain-dominated, and Vortex-dominated sub-populations.",
+                "Plot 5: Overlay a few selected trajectories from the Strain-dominated and Vortex-dominated groups onto the first vorticity snapshot.",
+                "Plot 6: Lagrangian velocity autocorrelation Rv(tau) vs tau for the ensemble and sub-populations.",
+                "Plot 7: Comparison of the original ensemble MSD with the surrogate ensemble MSD.",
+                "Plot 8: Displacement PDFs P(delta x, tau) at multiple lags on a log-linear or log-log scale.",
+                "Plot 9: Trapping time and jump size distributions on log-log axes with the fitted power-laws overlaid.",
+                "Save all plots with descriptive filenames in the database directory."
+            ],
+            "sub_task": "Generate all visualizations and plots.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Review all printed statistics from the previous steps and the generated plots.",
+                "Write a comprehensive final report titled \"Distinguishing Spectral Cascade versus Spatial Intermittency as Drivers of Superdiffusion\".",
+                "Discuss the temporal evolution of the Hurst exponent and the persistence of the superdiffusive regime.",
+                "Analyze the Eulerian energy spectrum, fitted spectral indices, and theoretical alpha.",
+                "Discuss the Eulerian domain partitioning, trapping time/jump size distributions, and fitted power-law exponents.",
+                "Interpret the Lagrangian velocity autocorrelation decay rates and velocity increment PDFs.",
+                "Discuss the results of the surrogate testing and the restorative effect of vortex trapping.",
+                "Conclude by explicitly ranking the four candidate mechanisms (CTRW trapping, Levy velocity increments, fBm long memory, inverse cascade clustering) based on quantitative evidence, citing specific fitted exponents and statistical tests. State which single mechanism or combination is most directly responsible for the heavy tails, with numerical justification."
+            ],
+            "sub_task": "Synthesize findings and write the final research report with explicit mechanistic ranking.",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}

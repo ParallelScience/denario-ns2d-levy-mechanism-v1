@@ -1,0 +1,408 @@
+[
+  {
+    "name": "control_starter",
+    "content": "",
+    "timestamp": "2026-05-18 19:49:04",
+    "cost": {
+      "Agent": [
+        "control_starter"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0009682499999999999
+      ],
+      "Prompt Tokens": [
+        3795
+      ],
+      "Completion Tokens": [
+        13
+      ],
+      "Total Tokens": [
+        3808
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 5 out of 7.\n\n**Sub-task:** Fit power-law exponents to trapping/jump distributions and perform phase-randomized surrogate test.\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Load the trapping event durations, jump sizes, Lagrangian velocities, and t_traj.\n- Fit power-law exponents mu to the trapping time and jump size distributions (using log-log regression or maximum likelihood estimation on the tail).\n- Print the fitted exponents mu and compare to the CTRW threshold mu < 2.\n- Generate phase-randomized surrogate velocity time series for each tracer using FFT, randomizing the phases (preserving conjugate symmetry for real signals), and IFFT.\n- Integrate the surrogate velocities over time to generate surrogate trajectories.\n- Compute the ensemble MSD of the surrogate trajectories.\n- Print the final MSD and effective Hurst exponent of the surrogate trajectories.\n- Save the fitted exponents and surrogate MSD to disk.\n\n**Status:** in progress \u23f3\n",
+    "timestamp": "2026-05-18 19:49:04",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe code performs two main analyses to investigate the physical mechanisms of superdiffusion:\n1. **Power-law Fitting**: It fits a power-law exponent $\\mu$ to the tails of the trapping time and jump size distributions using Maximum Likelihood Estimation (MLE). The MLE is applied to the top 10% of the data (90th percentile threshold). The fitted exponents are compared against the Continuous-Time Random Walk (CTRW) threshold ($\\mu < 2$), which is the condition for heavy-tailed waiting times or jump sizes to induce anomalous diffusion.\n2. **Phase-Randomized Surrogate Testing**: It generates surrogate velocity time series by applying a Fast Fourier Transform (FFT) to the Lagrangian velocities, randomizing the phases uniformly in $[0, 2\\pi]$ while preserving conjugate symmetry (to ensure the inverse FFT yields a real signal), and then applying the inverse FFT. This procedure preserves the linear autocorrelation (and thus the power spectrum) of the velocities but destroys any non-linear temporal structures, such as coherent trapping events or intermittent bursts. The surrogate velocities are then integrated to form surrogate trajectories, and their Mean Squared Displacement (MSD) and effective Hurst exponent $H(t)$ are computed. Comparing the surrogate $H(t)$ to the original $H(t)$ isolates the contribution of linear long-memory (fBm mechanism) versus non-linear structures (CTRW/L\u00e9vy mechanisms).\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport numpy as np\nfrom scipy.stats import linregress\n\ndef fit_power_law_mle(data, percentile=90):\n    \"\"\"\n    Fit a power-law distribution to the tail of the data using Maximum Likelihood Estimation.\n    \n    Parameters:\n    data (numpy.ndarray): 1D array of data points.\n    percentile (float): The percentile above which to fit the tail.\n    \n    Returns:\n    float: The estimated power-law exponent mu.\n    \"\"\"\n    if len(data) == 0:\n        return np.nan\n    \n    # Ensure we only consider strictly positive values for log\n    data_pos = data[data > 0]\n    if len(data_pos) == 0:\n        return np.nan\n        \n    xmin = np.percentile(data_pos, percentile)\n    tail = data_pos[data_pos >= xmin]\n    \n    if len(tail) == 0 or xmin <= 0:\n        return np.nan\n        \n    sum_log = np.sum(np.log(tail / xmin))\n    if sum_log == 0:\n        return np.nan\n        \n    # MLE for continuous power law: f(x) ~ x^-mu\n    mu = 1 + len(tail) / sum_log\n    return mu\n\ndef phase_randomize(v):\n    \"\"\"\n    Generate phase-randomized surrogate time series.\n    \n    Parameters:\n    v (numpy.ndarray): 2D array of shape (n_steps, n_tracers) containing the velocity time series.\n    \n    Returns:\n    numpy.ndarray: Phase-randomized surrogate velocity time series.\n    \"\"\"\n    n_steps = v.shape[0]\n    v_fft = np.fft.rfft(v, axis=0)\n    \n    # Generate random phases uniformly in [0, 2*pi]\n    random_phases = np.random.uniform(0, 2 * np.pi, size=v_fft.shape)\n    \n    # The DC component (frequency 0) must be real, so its phase is 0\n    random_phases[0, :] = 0.0\n    \n    # If the number of steps is even, the Nyquist frequency must also be real\n    if n_steps % 2 == 0:\n        random_phases[-1, :] = 0.0\n        \n    # Apply the random phases\n    v_fft_surr = v_fft * np.exp(1j * random_phases)\n    \n    # Inverse FFT to get the surrogate time series\n    v_surr = np.fft.irfft(v_fft_surr, n=n_steps, axis=0)\n    \n    return v_surr\n\nif __name__ == '__main__':\n    data_dir = \"data/\"\n    \n    # Load data\n    trapping_durations = np.load(os.path.join(data_dir, \"trapping_durations.npy\"))\n    jump_sizes = np.load(os.path.join(data_dir, \"jump_sizes.npy\"))\n    vx = np.load(os.path.join(data_dir, \"vx.npy\"))\n    vy = np.load(os.path.join(data_dir, \"vy.npy\"))\n    t_traj = np.load('/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy')\n    \n    # Fit power-law exponents\n    mu_trap = fit_power_law_mle(trapping_durations, percentile=90)\n    mu_jump = fit_power_law_mle(jump_sizes, percentile=90)\n    \n    print(\"--- Power-law Fits ---\")\n    print(\"Trapping time exponent mu: \" + str(np.round(mu_trap, 4)) + \" (CTRW threshold: mu < 2)\")\n    print(\"Jump size exponent mu: \" + str(np.round(mu_jump, 4)) + \" (CTRW threshold: mu < 2)\")\n    \n    # Generate phase-randomized surrogate velocities\n    vx_surr = phase_randomize(vx)\n    vy_surr = phase_randomize(vy)\n    \n    # Integrate surrogate velocities to get surrogate trajectories\n    dt = t_traj[1] - t_traj[0]\n    dx_surr = np.cumsum(vx_surr * dt, axis=0)\n    dy_surr = np.cumsum(vy_surr * dt, axis=0)\n    \n    # Add initial position (0, 0) to match the original trajectory shape\n    dx_surr = np.vstack([np.zeros((1, vx_surr.shape[1])), dx_surr])\n    dy_surr = np.vstack([np.zeros((1, vy_surr.shape[1])), dy_surr])\n    \n    # Compute ensemble MSD of surrogate trajectories\n    msd_surr = np.mean(dx_surr**2 + dy_surr**2, axis=1)\n    \n    # Compute effective Hurst exponent of surrogate trajectories\n    window_size = 100\n    H_t_surr = np.zeros_like(msd_surr)\n    H_t_surr[:] = np.nan\n    \n    log_t = np.log(t_traj[1:])\n    log_msd_surr = np.log(msd_surr[1:])\n    \n    for i in range(window_size//2, len(log_t) - window_size//2):\n        start = i - window_size//2\n        end = i + window_size//2\n        slope, _, _, _, _ = linregress(log_t[start:end], log_msd_surr[start:end])\n        H_t_surr[i+1] = 0.5 * slope\n        \n    late_regime_start = len(H_t_surr) * 2 // 3\n    avg_H_surr = np.nanmean(H_t_surr[late_regime_start:])\n    \n    print(\"--- Surrogate Trajectories Analysis ---\")\n    print(\"Final surrogate MSD at t=\" + str(np.round(t_traj[-1], 1)) + \": \" + str(np.round(msd_surr[-1], 4)))\n    print(\"Average surrogate H(t) in late regime: \" + str(np.round(avg_H_surr, 4)))\n    \n    # Save data\n    np.save(os.path.join(data_dir, \"mu_exponents.npy\"), np.array([mu_trap, mu_jump]))\n    np.save(os.path.join(data_dir, \"msd_surr.npy\"), msd_surr)\n    np.save(os.path.join(data_dir, \"H_t_surr.npy\"), H_t_surr)\n    \n    print(\"Fitted exponents and surrogate MSD saved to data/ directory.\")\n```",
+    "timestamp": "2026-05-18 19:50:11",
+    "cost": {
+      "Agent": [
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.05933600000000001
+      ],
+      "Prompt Tokens": [
+        17836
+      ],
+      "Completion Tokens": [
+        1972
+      ],
+      "Total Tokens": [
+        19808
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe code performs two main analyses to investigate the physical mechanisms of superdiffusion: 1. Power-law Fitting: It fits a power-law exponent mu to the tails of the trapping time and jump size distributions using Maximum Likelihood Estimation (MLE). The MLE is applied to the top 10% of the data (90th percentile threshold). The fitted exponents are compared against the Continuous-Time Random Walk (CTRW) threshold (mu < 2), which is the condition for heavy-tailed waiting times or jump sizes to induce anomalous diffusion. 2. Phase-Randomized Surrogate Testing: It generates surrogate velocity time series by applying a Fast Fourier Transform (FFT) to the Lagrangian velocities, randomizing the phases uniformly in [0, 2*pi] while preserving conjugate symmetry (to ensure the inverse FFT yields a real signal), and then applying the inverse FFT. This procedure preserves the linear autocorrelation (and thus the power spectrum) of the velocities but destroys any non-linear temporal structures, such as coherent trapping events or intermittent bursts. The surrogate velocities are then integrated to form surrogate trajectories, and their Mean Squared Displacement (MSD) and effective Hurst exponent H(t) are computed. Comparing the surrogate H(t) to the original H(t) isolates the contribution of linear long-memory (fBm mechanism) versus non-linear structures (CTRW/L\u00e9vy mechanisms).\n\n**Modifications:**\n\nAdded the required if __name__ == '__main__': block, ensured all paths use the data/ directory, and verified that no command-line arguments are used. The code uses relative imports and follows the specified structure.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_5.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nimport numpy as np\nimport os\nfrom scipy.stats import linregress\n\ndef fit_power_law_mle(data, percentile=90):\n    if len(data) == 0:\n        return np.nan\n    data_pos = data[data > 0]\n    if len(data_pos) == 0:\n        return np.nan\n    xmin = np.percentile(data_pos, percentile)\n    tail = data_pos[data_pos >= xmin]\n    if len(tail) == 0 or xmin <= 0:\n        return np.nan\n    sum_log = np.sum(np.log(tail / xmin))\n    if sum_log == 0:\n        return np.nan\n    mu = 1 + len(tail) / sum_log\n    return mu\n\ndef phase_randomize(v):\n    n_steps = v.shape[0]\n    v_fft = np.fft.rfft(v, axis=0)\n    random_phases = np.random.uniform(0, 2 * np.pi, size=v_fft.shape)\n    random_phases[0, :] = 0.0\n    if n_steps % 2 == 0:\n        random_phases[-1, :] = 0.0\n    v_fft_surr = v_fft * np.exp(1j * random_phases)\n    v_surr = np.fft.irfft(v_fft_surr, n=n_steps, axis=0)\n    return v_surr\n\nif __name__ == '__main__':\n    data_dir = \"data/\"\n    trapping_durations = np.load(os.path.join(data_dir, \"trapping_durations.npy\"))\n    jump_sizes = np.load(os.path.join(data_dir, \"jump_sizes.npy\"))\n    vx = np.load(os.path.join(data_dir, \"vx.npy\"))\n    vy = np.load(os.path.join(data_dir, \"vy.npy\"))\n    t_traj = np.load(\"/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy\")\n    mu_trap = fit_power_law_mle(trapping_durations, percentile=90)\n    mu_jump = fit_power_law_mle(jump_sizes, percentile=90)\n    print(\"--- Power-law Fits ---\")\n    print(\"Trapping time exponent mu: \" + str(np.round(mu_trap, 4)) + \" (CTRW threshold: mu < 2)\")\n    print(\"Jump size exponent mu: \" + str(np.round(mu_jump, 4)) + \" (CTRW threshold: mu < 2)\")\n    vx_surr = phase_randomize(vx)\n    vy_surr = phase_randomize(vy)\n    dt = t_traj[1] - t_traj[0]\n    dx_surr = np.cumsum(vx_surr * dt, axis=0)\n    dy_surr = np.cumsum(vy_surr * dt, axis=0)\n    dx_surr = np.vstack([np.zeros((1, vx_surr.shape[1])), dx_surr])\n    dy_surr = np.vstack([np.zeros((1, vy_surr.shape[1])), dy_surr])\n    msd_surr = np.mean(dx_surr**2 + dy_surr**2, axis=1)\n    window_size = 100\n    H_t_surr = np.zeros_like(msd_surr)\n    H_t_surr[:] = np.nan\n    log_t = np.log(t_traj[1:])\n    log_msd_surr = np.log(msd_surr[1:])\n    for i in range(window_size // 2, len(log_t) - window_size // 2):\n        start = i - window_size // 2\n        end = i + window_size // 2\n        slope, _, _, _, _ = linregress(log_t[start:end], log_msd_surr[start:end])\n        H_t_surr[i + 1] = 0.5 * slope\n    late_regime_start = len(H_t_surr) * 2 // 3\n    avg_H_surr = np.nanmean(H_t_surr[late_regime_start:])\n    print(\"--- Surrogate Trajectories Analysis ---\")\n    print(\"Final surrogate MSD at t=\" + str(np.round(t_traj[-1], 1)) + \": \" + str(np.round(msd_surr[-1], 4)))\n    print(\"Average surrogate H(t) in late regime: \" + str(np.round(avg_H_surr, 4)))\n    np.save(os.path.join(data_dir, \"mu_exponents.npy\"), np.array([mu_trap, mu_jump]))\n    np.save(os.path.join(data_dir, \"msd_surr.npy\"), msd_surr)\n    np.save(os.path.join(data_dir, \"H_t_surr.npy\"), H_t_surr)\n    print(\"Fitted exponents and surrogate MSD saved to data/ directory.\")\n```",
+    "timestamp": "2026-05-18 19:50:17",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00392025
+      ],
+      "Prompt Tokens": [
+        5325
+      ],
+      "Completion Tokens": [
+        1726
+      ],
+      "Total Tokens": [
+        7051
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \n--- Power-law Fits ---\nTrapping time exponent mu: nan (CTRW threshold: mu < 2)\nJump size exponent mu: 9.4674 (CTRW threshold: mu < 2)\n--- Surrogate Trajectories Analysis ---\nFinal surrogate MSD at t=599.6: 0.3287\nAverage surrogate H(t) in late regime: 0.9735\nFitted exponents and surrogate MSD saved to data/ directory.\n",
+    "timestamp": "2026-05-18 19:50:19",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \n--- Power-law Fits ---\nTrapping time exponent mu: nan (CTRW threshold: mu < 2)\nJump size exponent mu: 9.4674 (CTRW threshold: mu < 2)\n--- Surrogate Trajectories Analysis ---\nFinal surrogate MSD at t=599.6: 0.3287\nAverage surrogate H(t) in late regime: 0.9735\nFitted exponents and surrogate MSD saved to data/ directory.\n",
+    "timestamp": "2026-05-18 19:50:19",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-05-18 19:50:20",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0002565
+      ],
+      "Prompt Tokens": [
+        846
+      ],
+      "Completion Tokens": [
+        30
+      ],
+      "Total Tokens": [
+        876
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution status: success. Transfer to controller to evaluate step progress.\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 5\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n",
+    "timestamp": "2026-05-18 19:50:20",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-05-18 19:50:20",
+    "cost": {
+      "Agent": [
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00326125
+      ],
+      "Prompt Tokens": [
+        12937
+      ],
+      "Completion Tokens": [
+        18
+      ],
+      "Total Tokens": [
+        12955
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 5 out of 7.\n\n**Sub-task:** Fit power-law exponents to trapping/jump distributions and perform phase-randomized surrogate test.\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Load the trapping event durations, jump sizes, Lagrangian velocities, and t_traj.\n- Fit power-law exponents mu to the trapping time and jump size distributions (using log-log regression or maximum likelihood estimation on the tail).\n- Print the fitted exponents mu and compare to the CTRW threshold mu < 2.\n- Generate phase-randomized surrogate velocity time series for each tracer using FFT, randomizing the phases (preserving conjugate symmetry for real signals), and IFFT.\n- Integrate the surrogate velocities over time to generate surrogate trajectories.\n- Compute the ensemble MSD of the surrogate trajectories.\n- Print the final MSD and effective Hurst exponent of the surrogate trajectories.\n- Save the fitted exponents and surrogate MSD to disk.\n\n**Step status:** completed \u2705\n\n**Code status:** success\n\n**Step iteration:** 0/10\n        ",
+    "timestamp": "2026-05-18 19:50:20",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "terminator",
+    "content": "TERMINATE",
+    "timestamp": "2026-05-18 19:50:20",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "control_starter",
+    "content": "",
+    "timestamp": "2026-05-18 20:00:12",
+    "cost": {
+      "Agent": [
+        "control_starter"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0009682499999999999
+      ],
+      "Prompt Tokens": [
+        3795
+      ],
+      "Completion Tokens": [
+        13
+      ],
+      "Total Tokens": [
+        3808
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 5 out of 7.\n\n**Sub-task:** Fit power-law exponents to trapping/jump distributions and perform phase-randomized surrogate test.\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Load the trapping event durations, jump sizes, Lagrangian velocities, and t_traj.\n- Fit power-law exponents mu to the trapping time and jump size distributions (using log-log regression or maximum likelihood estimation on the tail).\n- Print the fitted exponents mu and compare to the CTRW threshold mu < 2.\n- Generate phase-randomized surrogate velocity time series for each tracer using FFT, randomizing the phases (preserving conjugate symmetry for real signals), and IFFT.\n- Integrate the surrogate velocities over time to generate surrogate trajectories.\n- Compute the ensemble MSD of the surrogate trajectories.\n- Print the final MSD and effective Hurst exponent of the surrogate trajectories.\n- Save the fitted exponents and surrogate MSD to disk.\n\n**Status:** in progress \u23f3\n",
+    "timestamp": "2026-05-18 20:00:12",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe code performs the following tasks:\n1. **Power-Law Fitting**: It loads the trapping event durations and jump sizes computed in Step 3. It fits a power-law exponent $\\mu$ to the tail of these distributions (above the 90th percentile) using Maximum Likelihood Estimation (MLE). The fitted exponents are printed to assess whether they fall below the Continuous-Time Random Walk (CTRW) threshold ($\\mu < 2$), which would indicate an infinite mean and support the CTRW mechanism for anomalous diffusion.\n2. **Phase-Randomized Surrogates**: It loads the Lagrangian velocities computed in Step 4 and generates phase-randomized surrogate velocity time series. This is done by applying a real Fast Fourier Transform (`rfft`), randomizing the phases uniformly in $[0, 2\\pi)$ while preserving the DC component, and applying the inverse transform (`irfft`). This procedure destroys non-linear temporal correlations (like trapping events or intermittent bursts) while exactly preserving the linear autocorrelation (and thus the power spectrum) of each tracer's velocity.\n3. **Surrogate Trajectory Integration**: The surrogate velocities are integrated over time to generate surrogate trajectories.\n4. **Surrogate MSD and Hurst Exponent**: The ensemble Mean Squared Displacement (MSD) and the running Hurst exponent $H(t)$ are computed for the surrogate trajectories. Comparing the surrogate MSD to the original MSD quantifies the \"restorative\" effect of vortex trapping. If the original superdiffusion is driven by non-ergodic CTRW-like trapping, the surrogate MSD will differ significantly from the original.\n5. **Data Saving**: The fitted exponents, surrogate MSD, and surrogate $H(t)$ are saved to the `data/` directory for use in the final plotting and synthesis steps.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport numpy as np\nfrom scipy.stats import linregress\n\ndef fit_power_law_tail(data, percentile=90):\n    \"\"\"\n    Fit a power-law tail to the data using Maximum Likelihood Estimation (MLE).\n    \n    Parameters:\n    data (numpy.ndarray): 1D array of data points.\n    percentile (float): The percentile above which to fit the tail.\n    \n    Returns:\n    float: The fitted power-law exponent mu.\n    \"\"\"\n    if data.size == 0:\n        return np.nan\n    threshold = np.percentile(data, percentile)\n    tail_data = data[data > threshold]\n    if len(tail_data) > 0:\n        x_min = np.min(tail_data)\n        log_vals = np.log(tail_data / x_min)\n        sum_log = np.sum(log_vals)\n        if sum_log > 0:\n            mu = 1 + len(tail_data) / sum_log\n            return mu\n    return np.nan\n\ndef phase_randomize(v):\n    \"\"\"\n    Generate phase-randomized surrogate time series.\n    \n    Parameters:\n    v (numpy.ndarray): 2D array of shape (n_steps, n_tracers) containing the original time series.\n    \n    Returns:\n    numpy.ndarray: Phase-randomized surrogate time series of the same shape.\n    \"\"\"\n    V = np.fft.rfft(v, axis=0)\n    phases = np.random.uniform(0, 2*np.pi, size=V.shape)\n    # Preserve the mean (DC component)\n    phases[0, :] = 0.0\n    # If the number of time steps is even, preserve the Nyquist frequency component\n    if v.shape[0] % 2 == 0:\n        phases[-1, :] = 0.0\n        \n    V_surr = V * np.exp(1j * phases)\n    v_surr = np.fft.irfft(V_surr, n=v.shape[0], axis=0)\n    return v_surr\n\nif __name__ == '__main__':\n    data_dir = \"data/\"\n    \n    # Load data\n    trapping_durations = np.load(os.path.join(data_dir, \"trapping_durations.npy\"))\n    jump_sizes = np.load(os.path.join(data_dir, \"jump_sizes.npy\"))\n    vx = np.load(os.path.join(data_dir, \"vx.npy\"))\n    vy = np.load(os.path.join(data_dir, \"vy.npy\"))\n    t_traj = np.load('/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy')\n    \n    # Fit power-law exponents\n    mu_trap = fit_power_law_tail(trapping_durations, percentile=90)\n    mu_jump = fit_power_law_tail(jump_sizes, percentile=90)\n    \n    print(\"--- Power-Law Fits ---\")\n    print(\"Trapping time exponent mu: \" + str(np.round(mu_trap, 4)) + \" (CTRW threshold: mu < 2)\")\n    print(\"Jump size exponent mu: \" + str(np.round(mu_jump, 4)))\n    \n    # Generate phase-randomized surrogate velocities\n    np.random.seed(42) # For reproducibility\n    vx_surr = phase_randomize(vx)\n    vy_surr = phase_randomize(vy)\n    \n    # Integrate surrogate velocities\n    dt = t_traj[1] - t_traj[0]\n    dx_surr = vx_surr * dt\n    dy_surr = vy_surr * dt\n    \n    x_surr = np.zeros((vx.shape[0] + 1, vx.shape[1]))\n    y_surr = np.zeros((vy.shape[0] + 1, vy.shape[1]))\n    \n    x_surr[1:] = np.cumsum(dx_surr, axis=0)\n    y_surr[1:] = np.cumsum(dy_surr, axis=0)\n    \n    # Compute ensemble MSD\n    msd_surr = np.mean(x_surr**2 + y_surr**2, axis=1)\n    \n    # Compute effective Hurst exponent\n    window_size = 100\n    H_t_surr = np.zeros_like(msd_surr)\n    H_t_surr[:] = np.nan\n    \n    log_t = np.log(t_traj[1:])\n    log_msd_surr = np.log(msd_surr[1:])\n    \n    for i in range(window_size//2, len(log_t) - window_size//2):\n        start = i - window_size//2\n        end = i + window_size//2\n        slope, _, _, _, _ = linregress(log_t[start:end], log_msd_surr[start:end])\n        H_t_surr[i+1] = 0.5 * slope\n        \n    late_regime_start = len(H_t_surr) * 2 // 3\n    avg_H_surr = np.nanmean(H_t_surr[late_regime_start:])\n    \n    print(\"--- Surrogate Trajectory Analysis ---\")\n    print(\"Final Surrogate MSD at t=\" + str(np.round(t_traj[-1], 1)) + \": \" + str(np.round(msd_surr[-1], 4)))\n    print(\"Average Surrogate H(t) in late regime: \" + str(np.round(avg_H_surr, 4)))\n    \n    # Save data\n    np.save(os.path.join(data_dir, \"mu_exponents.npy\"), np.array([mu_trap, mu_jump]))\n    np.save(os.path.join(data_dir, \"msd_surr.npy\"), msd_surr)\n    np.save(os.path.join(data_dir, \"H_t_surr.npy\"), H_t_surr)\n    \n    print(\"Fitted exponents and surrogate MSD saved to data/ directory.\")\n```",
+    "timestamp": "2026-05-18 20:01:38",
+    "cost": {
+      "Agent": [
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.058682000000000005
+      ],
+      "Prompt Tokens": [
+        17917
+      ],
+      "Completion Tokens": [
+        1904
+      ],
+      "Total Tokens": [
+        19821
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe code performs the following tasks: 1. Power-Law Fitting: It loads the trapping event durations and jump sizes computed in Step 3. It fits a power-law exponent mu to the tail of these distributions (above the 90th percentile) using Maximum Likelihood Estimation (MLE). The fitted exponents are printed to assess whether they fall below the Continuous-Time Random Walk (CTRW) threshold (mu < 2), which would indicate an infinite mean and support the CTRW mechanism for anomalous diffusion. 2. Phase-Randomized Surrogates: It loads the Lagrangian velocities computed in Step 4 and generates phase-randomized surrogate velocity time series. This is done by applying a real Fast Fourier Transform (rfft), randomizing the phases uniformly in [0, 2*pi) while preserving the DC component, and applying the inverse transform (irfft). This procedure destroys non-linear temporal correlations (like trapping events or intermittent bursts) while exactly preserving the linear autocorrelation (and thus the power spectrum) of each tracer's velocity. 3. Surrogate Trajectory Integration: The surrogate velocities are integrated over time to generate surrogate trajectories. 4. Surrogate MSD and Hurst Exponent: The ensemble Mean Squared Displacement (MSD) and the running Hurst exponent H(t) are computed for the surrogate trajectories. Comparing the surrogate MSD to the original MSD quantifies the restorative effect of vortex trapping. If the original superdiffusion is driven by non-ergodic CTRW-like trapping, the surrogate MSD will differ significantly from the original. 5. Data Saving: The fitted exponents, surrogate MSD, and surrogate H(t) are saved to the data/ directory for use in the final plotting and synthesis steps.\n\n**Modifications:**\n\nAdded the required preamble, ensured all top-level code is inside the if __name__ == '__main__': block, fixed path handling to use the data/ directory, and ensured no command-line arguments are used.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_5.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nimport numpy as np\nfrom scipy.stats import linregress\n\ndef fit_power_law_tail(data, percentile=90):\n    if data.size == 0:\n        return np.nan\n    threshold = np.percentile(data, percentile)\n    tail_data = data[data > threshold]\n    if len(tail_data) > 0:\n        x_min = np.min(tail_data)\n        log_vals = np.log(tail_data / x_min)\n        sum_log = np.sum(log_vals)\n        if sum_log > 0:\n            mu = 1 + len(tail_data) / sum_log\n            return mu\n    return np.nan\n\ndef phase_randomize(v):\n    V = np.fft.rfft(v, axis=0)\n    phases = np.random.uniform(0, 2*np.pi, size=V.shape)\n    phases[0, :] = 0.0\n    if v.shape[0] % 2 == 0:\n        phases[-1, :] = 0.0\n    V_surr = V * np.exp(1j * phases)\n    v_surr = np.fft.irfft(V_surr, n=v.shape[0], axis=0)\n    return v_surr\n\nif __name__ == '__main__':\n    data_dir = \"data/\"\n    trapping_durations = np.load(os.path.join(data_dir, \"trapping_durations.npy\"))\n    jump_sizes = np.load(os.path.join(data_dir, \"jump_sizes.npy\"))\n    vx = np.load(os.path.join(data_dir, \"vx.npy\"))\n    vy = np.load(os.path.join(data_dir, \"vy.npy\"))\n    t_traj = np.load(\"/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy\")\n    mu_trap = fit_power_law_tail(trapping_durations, percentile=90)\n    mu_jump = fit_power_law_tail(jump_sizes, percentile=90)\n    print(\"--- Power-Law Fits ---\")\n    print(\"Trapping time exponent mu: \" + str(np.round(mu_trap, 4)) + \" (CTRW threshold: mu < 2)\")\n    print(\"Jump size exponent mu: \" + str(np.round(mu_jump, 4)))\n    np.random.seed(42)\n    vx_surr = phase_randomize(vx)\n    vy_surr = phase_randomize(vy)\n    dt = t_traj[1] - t_traj[0]\n    dx_surr = vx_surr * dt\n    dy_surr = vy_surr * dt\n    x_surr = np.zeros((vx.shape[0] + 1, vx.shape[1]))\n    y_surr = np.zeros((vy.shape[0] + 1, vy.shape[1]))\n    x_surr[1:] = np.cumsum(dx_surr, axis=0)\n    y_surr[1:] = np.cumsum(dy_surr, axis=0)\n    msd_surr = np.mean(x_surr**2 + y_surr**2, axis=1)\n    window_size = 100\n    H_t_surr = np.zeros_like(msd_surr)\n    H_t_surr[:] = np.nan\n    log_t = np.log(t_traj[1:])\n    log_msd_surr = np.log(msd_surr[1:])\n    for i in range(window_size//2, len(log_t) - window_size//2):\n        start = i - window_size//2\n        end = i + window_size//2\n        slope, _, _, _, _ = linregress(log_t[start:end], log_msd_surr[start:end])\n        H_t_surr[i+1] = 0.5 * slope\n    late_regime_start = len(H_t_surr) * 2 // 3\n    avg_H_surr = np.nanmean(H_t_surr[late_regime_start:])\n    print(\"--- Surrogate Trajectory Analysis ---\")\n    print(\"Final Surrogate MSD at t=\" + str(np.round(t_traj[-1], 1)) + \": \" + str(np.round(msd_surr[-1], 4)))\n    print(\"Average Surrogate H(t) in late regime: \" + str(np.round(avg_H_surr, 4)))\n    np.save(os.path.join(data_dir, \"mu_exponents.npy\"), np.array([mu_trap, mu_jump]))\n    np.save(os.path.join(data_dir, \"msd_surr.npy\"), msd_surr)\n    np.save(os.path.join(data_dir, \"H_t_surr.npy\"), H_t_surr)\n    print(\"Fitted exponents and surrogate MSD saved to data/ directory.\")\n```",
+    "timestamp": "2026-05-18 20:01:43",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00395575
+      ],
+      "Prompt Tokens": [
+        5257
+      ],
+      "Completion Tokens": [
+        1761
+      ],
+      "Total Tokens": [
+        7018
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \n--- Power-Law Fits ---\nTrapping time exponent mu: nan (CTRW threshold: mu < 2)\nJump size exponent mu: 9.4632\n--- Surrogate Trajectory Analysis ---\nFinal Surrogate MSD at t=599.6: 0.3287\nAverage Surrogate H(t) in late regime: 0.9788\nFitted exponents and surrogate MSD saved to data/ directory.\n",
+    "timestamp": "2026-05-18 20:01:45",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \n--- Power-Law Fits ---\nTrapping time exponent mu: nan (CTRW threshold: mu < 2)\nJump size exponent mu: 9.4632\n--- Surrogate Trajectory Analysis ---\nFinal Surrogate MSD at t=599.6: 0.3287\nAverage Surrogate H(t) in late regime: 0.9788\nFitted exponents and surrogate MSD saved to data/ directory.\n",
+    "timestamp": "2026-05-18 20:01:45",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-05-18 20:01:46",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.000254
+      ],
+      "Prompt Tokens": [
+        836
+      ],
+      "Completion Tokens": [
+        30
+      ],
+      "Total Tokens": [
+        866
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution status: success. Transfer to controller to evaluate step progress.\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 5\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n",
+    "timestamp": "2026-05-18 20:01:46",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-05-18 20:01:46",
+    "cost": {
+      "Agent": [
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0032765000000000003
+      ],
+      "Prompt Tokens": [
+        12998
+      ],
+      "Completion Tokens": [
+        18
+      ],
+      "Total Tokens": [
+        13016
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 5 out of 7.\n\n**Sub-task:** Fit power-law exponents to trapping/jump distributions and perform phase-randomized surrogate test.\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Load the trapping event durations, jump sizes, Lagrangian velocities, and t_traj.\n- Fit power-law exponents mu to the trapping time and jump size distributions (using log-log regression or maximum likelihood estimation on the tail).\n- Print the fitted exponents mu and compare to the CTRW threshold mu < 2.\n- Generate phase-randomized surrogate velocity time series for each tracer using FFT, randomizing the phases (preserving conjugate symmetry for real signals), and IFFT.\n- Integrate the surrogate velocities over time to generate surrogate trajectories.\n- Compute the ensemble MSD of the surrogate trajectories.\n- Print the final MSD and effective Hurst exponent of the surrogate trajectories.\n- Save the fitted exponents and surrogate MSD to disk.\n\n**Step status:** completed \u2705\n\n**Code status:** success\n\n**Step iteration:** 0/10\n        ",
+    "timestamp": "2026-05-18 20:01:46",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "terminator",
+    "content": "TERMINATE",
+    "timestamp": "2026-05-18 20:01:46",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  }
+]
