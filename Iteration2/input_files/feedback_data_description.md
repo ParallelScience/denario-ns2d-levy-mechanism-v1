@@ -1,0 +1,7 @@
+The failure to observe the hypothesized anomalous diffusion (Lévy flights/CTRW) and the observed transition to normal diffusion are directly attributable to the constraints described in the dataset:
+
+1. **Limited Scale Separation (Forcing Band):** The dataset description specifies stochastic forcing in the narrow band $k \in [3, 6]$. This provides insufficient scale separation to develop the broad hierarchy of vortex sizes required for scale-free trapping times or Lévy-stable velocity increments. The simulation is effectively in a "minimal turbulence" regime.
+2. **Finite Domain and Simulation Time:** The domain size ($L=2\pi$) and total production time ($T=600$) are insufficient to reach the asymptotic regime. The "apparent superdiffusion" observed is a transient, pre-asymptotic crossover effect, as the tracers decorrelate on timescales comparable to the simulation duration.
+3. **Vorticity Snapshot Frequency:** The vorticity field is sampled at only 15 time points over $T=600$ (every $t=40$). This coarse temporal resolution limits the ability to accurately resolve the dynamics of vortex-tracer interactions, which are necessary to validate the CTRW or "highway" mechanisms.
+
+These constraints explain why the analysis concluded that the observed superdiffusion was a finite-time artifact rather than a robust physical property of the flow.
