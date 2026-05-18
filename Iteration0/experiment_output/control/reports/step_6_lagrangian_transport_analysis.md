@@ -1,3 +1,4 @@
+<!-- filename: reports/step_6_lagrangian_transport_analysis.md -->
 # Lagrangian Transport and Anomalous Diffusion
 
 The global transport properties of the Lagrangian tracers in the simulated 2D Navier-Stokes flow reveal a strongly superdiffusive regime. The Mean Squared Displacement (MSD) scales according to <code>\langle \Delta \mathbf{x}^2(\tau) \rangle \sim \tau^{2H}</code>, with an estimated Hurst exponent of <code>H \approx 0.976</code>. This value is exceptionally high, approaching the ballistic limit (<code>H=1</code>), which indicates that tracer trajectories are highly persistent and maintain their direction and speed over extended time scales.

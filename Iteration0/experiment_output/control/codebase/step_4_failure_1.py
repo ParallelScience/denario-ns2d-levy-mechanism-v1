@@ -3,7 +3,6 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath("codebase"))
 sys.path.insert(0, "/home/node/data/compsep_data/")
-sys.path.insert(0, '/home/node/data/compsep_data/')
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -21,15 +20,15 @@ def plot_all():
         ax = axes[i]
         data = disp_dists['x_' + lag]
         data = data[~np.isnan(data)]
-        data_std = (data - np.mean(data)) / np.std(data)
-        counts, bins, _ = ax.hist(data_std, bins=100, density=True, alpha=0.6, label='Data')
+        counts, bins, _ = ax.hist(data, bins=100, density=True, alpha=0.6, label='Data')
+        mu, std = np.mean(data), np.std(data)
         x = np.linspace(bins[0], bins[-1], 200)
-        p = norm.pdf(x, 0, 1)
-        ax.plot(x, p, 'k--', linewidth=2, label='Gaussian N(0,1)')
+        p = norm.pdf(x, mu, std)
+        ax.plot(x, p, 'k--', linewidth=2, label='Gaussian fit')
         ax.set_yscale('log')
         ax.set_ylim(bottom=1e-5)
         ax.set_title('Lag = ' + lag + ' steps')
-        ax.set_xlabel('Standardized Displacement')
+        ax.set_xlabel('Displacement dx [length]')
         ax.set_ylabel('PDF')
         ax.legend()
     plt.tight_layout()
@@ -51,29 +50,22 @@ def plot_all():
         disp_x = (unwrapped_x[lag:] - unwrapped_x[:-lag]).flatten()
         disp_y = (unwrapped_y[lag:] - unwrapped_y[:-lag]).flatten()
         disp_all = np.concatenate([disp_x, disp_y])
-        mad = np.median(np.abs(disp_all - np.median(disp_all)))
-        if mad == 0:
+        std_disp = np.std(disp_all)
+        if std_disp == 0:
             alphas.append(np.nan)
             tau_alpha.append(lag * dt)
             continue
-        k_vals = np.logspace(-3, 1, 200) / mad
+        k_vals = np.logspace(-2, 1, 100) / std_disp
         phi_k = np.zeros_like(k_vals, dtype=float)
         for i, k in enumerate(k_vals):
             phi_k[i] = np.mean(np.cos(k * disp_all))
-        valid = (phi_k > 0.05) & (phi_k < 0.95)
+        valid = (phi_k > 0.1) & (phi_k < 0.9)
         if np.sum(valid) > 5:
             x_fit = np.log(k_vals[valid])
             y_fit = np.log(-np.log(phi_k[valid]))
-            try:
-                popt = np.polyfit(x_fit, y_fit, 1)
-                if isinstance(popt, np.ndarray) and popt.size > 0:
-                    alpha_est = popt[0]
-                else:
-                    alpha_est = popt
-                alpha_est = min(max(alpha_est, 0.0), 2.0)
-            except Exception as e:
-                print('Fit failed for lag ' + str(lag) + ': ' + str(e))
-                alpha_est = np.nan
+            popt, _ = np.polyfit(x_fit, y_fit, 1, cov=False)
+            alpha_est = popt[0]
+            alpha_est = min(max(alpha_est, 0.0), 2.0)
         else:
             alpha_est = np.nan
         alphas.append(alpha_est)
@@ -97,13 +89,12 @@ def plot_all():
     tau_Rv = lag_stats['tau_Rv']
     Rv = lag_stats['Rv']
     plt.figure(figsize=(8, 6))
-    valid_tau = tau_Rv > 0
-    plt.loglog(tau_Rv[valid_tau], np.abs(Rv[valid_tau]), 'b-', linewidth=2, label='|R_v|')
+    plt.plot(tau_Rv, Rv, linewidth=2)
+    plt.xscale('log')
     plt.xlabel('Lag time tau [time]')
-    plt.ylabel('|Velocity Autocorrelation R_v|')
-    plt.title('Lagrangian Velocity Autocorrelation (Log-Log)')
+    plt.ylabel('Velocity Autocorrelation R_v')
+    plt.title('Lagrangian Velocity Autocorrelation')
     plt.grid(True)
-    plt.legend()
     plt.tight_layout()
     filepath = 'data/velocity_autocorr_3_' + timestamp + '.png'
     plt.savefig(filepath, dpi=300)
@@ -115,14 +106,28 @@ def plot_all():
     plt.figure(figsize=(8, 6))
     valid = (k_vals > 0) & (E_k > 0)
     plt.loglog(k_vals[valid], E_k[valid], 'b-', linewidth=2, label='E(k)')
+    mask_ls = (k_vals >= 1) & (k_vals <= 3)
+    if np.sum(mask_ls) > 1:
+        popt_ls = np.polyfit(np.log(k_vals[mask_ls]), np.log(E_k[mask_ls]), 1)
+        slope_ls = popt_ls[0]
+        k_ls = np.linspace(1, 3, 10)
+        E_ls = np.exp(popt_ls[1]) * k_ls**popt_ls[0]
+        plt.loglog(k_ls, E_ls, 'r--', linewidth=2, label='Fit LS [1,3]: slope=' + str(round(slope_ls, 2)))
+    mask_ss = (k_vals >= 6) & (k_vals <= 20)
+    if np.sum(mask_ss) > 1:
+        popt_ss = np.polyfit(np.log(k_vals[mask_ss]), np.log(E_k[mask_ss]), 1)
+        slope_ss = popt_ss[0]
+        k_ss = np.linspace(6, 20, 10)
+        E_ss = np.exp(popt_ss[1]) * k_ss**popt_ss[0]
+        plt.loglog(k_ss, E_ss, 'g--', linewidth=2, label='Fit SS [6,20]: slope=' + str(round(slope_ss, 2)))
     if len(E_k) > 2 and E_k[2] > 0:
         k_ref_inv = np.linspace(1, 4, 10)
         E_ref_53 = E_k[2] * (k_ref_inv / 2)**(-5/3)
-        plt.loglog(k_ref_inv, E_ref_53, 'm--', linewidth=2, label='Ref k^-5/3')
-    if len(E_k) > 8 and E_k[8] > 0:
+        plt.loglog(k_ref_inv, E_ref_53, 'm:', linewidth=2, label='Ref k^-5/3')
+    if len(E_k) > 10 and E_k[10] > 0:
         k_ref_ens = np.linspace(6, 30, 10)
-        E_ref_3 = E_k[8] * (k_ref_ens / 8)**(-3)
-        plt.loglog(k_ref_ens, E_ref_3, 'k--', linewidth=2, label='Ref k^-3')
+        E_ref_3 = E_k[10] * (k_ref_ens / 10)**(-3)
+        plt.loglog(k_ref_ens, E_ref_3, 'k:', linewidth=2, label='Ref k^-3')
     plt.xlabel('Wavenumber k [1/length]')
     plt.ylabel('Energy Spectrum E(k) [length^3/time^2]')
     plt.title('Isotropic Energy Spectrum')
