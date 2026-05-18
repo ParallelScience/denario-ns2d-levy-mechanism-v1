@@ -530,5 +530,271 @@
       "Completion Tokens": [],
       "Total Tokens": []
     }
+  },
+  {
+    "name": "control_starter",
+    "content": "",
+    "timestamp": "2026-05-18 16:56:24",
+    "cost": {
+      "Agent": [
+        "control_starter"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0009519999999999999
+      ],
+      "Prompt Tokens": [
+        3730
+      ],
+      "Completion Tokens": [
+        13
+      ],
+      "Total Tokens": [
+        3743
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 5 out of 6.\n\n**Sub-task:** Plot Conditional Statistics, Trapping Times, and Jump Distributions\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Load the results saved in Step 3.\n- Plot the conditional displacement PDFs and conditional MSD, comparing the Vortex and Strain populations.\n- Plot the distribution of trapping times $P(\\tau_{trap})$ and perform a power-law fit to estimate the exponent $\\mu$.\n- Plot the normalized velocity increment PDFs for both regions.\n- Plot the jump size distribution $P(\\Delta x)$ for both Vortex-exit events and general Strain-region displacements on the same axes, with power-law fits overlaid.\n- Print detailed statistics regarding the correlation between large jumps and vortex exit events.\n- Save all plots as high-resolution PNGs.\n\n**Status:** in progress \u23f3\n",
+    "timestamp": "2026-05-18 16:56:24",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe script loads the conditional statistics computed in Step 3 and generates the required plots to analyze the differences between the Vortex and Strain populations. \n1. **Conditional MSD**: Plots the Mean Squared Displacement for tracers predominantly in the Vortex vs. Strain regions. The units are `[length^2]` vs `[time]`.\n2. **Conditional Displacement PDFs**: Plots the standardized displacement distributions for both populations at selected lag times, overlaid with a reference Gaussian. This highlights whether heavy tails are intrinsic to the strain field or a consequence of vortex trapping.\n3. **Trapping Times Distribution**: Plots the PDF of trapping event durations `[time]` and fits a power-law to the tail to estimate the exponent $\\mu$, which is a key parameter in the Continuous-Time Random Walk (CTRW) model.\n4. **Normalized Velocity Increment PDFs**: Plots the distributions of velocity increments normalized by the local RMS velocity for both regions, checking for direct L\u00e9vy-flight mechanisms.\n5. **Jump Size Distribution**: Recomputes the exact exit events (transitions from Vortex to Strain) and plots the jump size `[length]` distribution for these specific Vortex-exit events alongside general Strain-region displacements. Power-law fits are overlaid to compare their tail exponents.\nFinally, the script recomputes and prints detailed statistics regarding the correlation between large jumps (>3 standard deviations) and vortex exit events to quantify the ejection mechanism.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport time\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.optimize import curve_fit\n\nplt.rcParams['text.usetex'] = False\n\ndef plot_conditional_stats():\n    timestamp = str(int(time.time()))\n    \n    print('Loading conditional statistics...')\n    cond_stats = np.load('data/conditional_stats.npz')\n    lags = cond_stats['lags']\n    msd_vortex = cond_stats['msd_vortex']\n    msd_strain = cond_stats['msd_strain']\n    trapping_times = cond_stats['trapping_times']\n    \n    dt_traj = 0.4\n    tau_vals = lags * dt_traj\n    \n    print('Plotting Conditional MSD...')\n    plt.figure(figsize=(8, 6))\n    plt.loglog(tau_vals, msd_vortex, 'r-', linewidth=2, label='Vortex')\n    plt.loglog(tau_vals, msd_strain, 'b-', linewidth=2, label='Strain')\n    plt.xlabel('Lag time tau [time]')\n    plt.ylabel('Mean Squared Displacement (MSD) [length^2]')\n    plt.title('Conditional MSD: Vortex vs Strain')\n    plt.legend()\n    plt.grid(True)\n    plt.tight_layout()\n    filepath_msd = 'data/conditional_msd_1_' + timestamp + '.png'\n    plt.savefig(filepath_msd, dpi=300)\n    print('Plot saved to ' + filepath_msd)\n    plt.close()\n    \n    print('Plotting Conditional Displacement PDFs...')\n    selected_lags = [10, 50, 100, 200]\n    fig, axes = plt.subplots(2, 2, figsize=(12, 10))\n    axes = axes.flatten()\n    for i, lag in enumerate(selected_lags):\n        ax = axes[i]\n        dx_v = cond_stats['vortex_x_' + str(lag)]\n        dx_s = cond_stats['strain_x_' + str(lag)]\n        \n        dx_v = dx_v[~np.isnan(dx_v)]\n        dx_s = dx_s[~np.isnan(dx_s)]\n        \n        if len(dx_v) > 0:\n            dx_v_std = (dx_v - np.mean(dx_v)) / np.std(dx_v)\n            ax.hist(dx_v_std, bins=100, density=True, alpha=0.5, color='red', label='Vortex', log=True)\n        if len(dx_s) > 0:\n            dx_s_std = (dx_s - np.mean(dx_s)) / np.std(dx_s)\n            ax.hist(dx_s_std, bins=100, density=True, alpha=0.5, color='blue', label='Strain', log=True)\n            \n        x_vals = np.linspace(-5, 5, 200)\n        ax.plot(x_vals, 1/np.sqrt(2*np.pi)*np.exp(-0.5*x_vals**2), 'k--', label='Gaussian')\n        \n        ax.set_title('Lag = ' + str(lag) + ' steps (' + str(round(lag*dt_traj, 1)) + ' time)')\n        ax.set_xlabel('Standardized Displacement X')\n        ax.set_ylabel('PDF')\n        ax.set_ylim(bottom=1e-5)\n        ax.legend()\n    plt.tight_layout()\n    filepath_disp = 'data/conditional_disp_pdfs_2_' + timestamp + '.png'\n    plt.savefig(filepath_disp, dpi=300)\n    print('Plot saved to ' + filepath_disp)\n    plt.close()\n    \n    print('Plotting Trapping Times Distribution...')\n    plt.figure(figsize=(8, 6))\n    trapping_times = trapping_times[trapping_times > 0]\n    if len(trapping_times) > 0 and min(trapping_times) < max(trapping_times):\n        counts, bins = np.histogram(trapping_times, bins=np.logspace(np.log10(min(trapping_times)), np.log10(max(trapping_times)), 50), density=True)\n        bin_centers = (bins[:-1] + bins[1:]) / 2\n        valid = counts > 0\n        plt.loglog(bin_centers[valid], counts[valid], 'ko', label='Data')\n        \n        tail_mask = (bin_centers > 10) & valid\n        if np.sum(tail_mask) > 3:\n            try:\n                popt, _ = curve_fit(lambda x, a, mu: a * x**(-mu), bin_centers[tail_mask], counts[tail_mask], p0=[1.0, 1.5])\n                mu_est = popt[1]\n                plt.loglog(bin_centers[tail_mask], popt[0] * bin_centers[tail_mask]**(-mu_est), 'r-', linewidth=2, label='Fit: $\\\\mu$=' + str(round(mu_est, 2)))\n                print('Estimated trapping time power-law exponent mu: ' + str(mu_est))\n            except Exception as e:\n                print('Could not fit trapping times: ' + str(e))\n        else:\n            print('Not enough points to fit trapping time power law.')\n            \n    plt.xlabel('Trapping Time $\\\\tau_{trap}$ [time]')\n    plt.ylabel('PDF $P(\\\\tau_{trap})$ [1/time]')\n    plt.title('Trapping Time Distribution')\n    plt.legend()\n    plt.grid(True)\n    plt.tight_layout()\n    filepath_trap = 'data/trapping_times_pdf_3_' + timestamp + '.png'\n    plt.savefig(filepath_trap, dpi=300)\n    print('Plot saved to ' + filepath_trap)\n    plt.close()\n    \n    print('Plotting Normalized Velocity Increment PDFs...')\n    vel_lags = [1, 10, 50]\n    fig, axes = plt.subplots(1, 3, figsize=(15, 5))\n    for i, lag in enumerate(vel_lags):\n        ax = axes[i]\n        dv_v = cond_stats['vortex_' + str(lag)]\n        dv_s = cond_stats['strain_' + str(lag)]\n        \n        dv_v = dv_v[~np.isnan(dv_v)]\n        dv_s = dv_s[~np.isnan(dv_s)]\n        \n        if len(dv_v) > 0:\n            ax.hist(dv_v, bins=100, density=True, alpha=0.5, color='red', label='Vortex', log=True)\n        if len(dv_s) > 0:\n            ax.hist(dv_s, bins=100, density=True, alpha=0.5, color='blue', label='Strain', log=True)\n            \n        ax.set_title('Lag = ' + str(lag) + ' steps')\n        ax.set_xlabel('Normalized Velocity Increment $\\\\delta v / v_{rms}$')\n        ax.set_ylabel('PDF')\n        ax.set_ylim(bottom=1e-6)\n        ax.legend()\n    plt.tight_layout()\n    filepath_vel = 'data/normalized_vel_incs_4_' + timestamp + '.png'\n    plt.savefig(filepath_vel, dpi=300)\n    print('Plot saved to ' + filepath_vel)\n    plt.close()\n    \n    print('Recomputing detailed statistics for large jumps and vortex exit events...')\n    traj_x = np.load('/home/node/work/projects/ns2d_levy_v1/data/traj_x.npy')\n    traj_y = np.load('/home/node/work/projects/ns2d_levy_v1/data/traj_y.npy')\n    t_traj = np.load('/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy')\n    snap_times = np.load('/home/node/work/projects/ns2d_levy_v1/data/snap_times.npy')\n    eulerian = np.load('data/eulerian_stats.npz')\n    Q_fields = eulerian['Q_fields']\n    \n    n_steps, n_tracers = traj_x.shape\n    N = 256\n    L = 2 * np.pi\n    dx = L / N\n    \n    nearest_snap_idx = np.array([np.argmin(np.abs(snap_times - t)) for t in t_traj])\n    grid_x = np.floor(traj_x / dx).astype(int) % N\n    grid_y = np.floor(traj_y / dx).astype(int) % N\n    \n    tracer_states = np.zeros((n_steps, n_tracers), dtype=int)\n    for t_idx in range(n_steps):\n        s_idx = nearest_snap_idx[t_idx]\n        q_vals = Q_fields[s_idx, grid_y[t_idx], grid_x[t_idx]]\n        tracer_states[t_idx] = (q_vals < 0).astype(int)\n        \n    unwrapped_x = np.load('data/unwrapped_traj_x.npy')\n    unwrapped_y = np.load('data/unwrapped_traj_y.npy')\n    \n    dx_1 = unwrapped_x[1:] - unwrapped_x[:-1]\n    dy_1 = unwrapped_y[1:] - unwrapped_y[:-1]\n    dr_1 = np.sqrt(dx_1**2 + dy_1**2)\n    \n    jump_mean = np.mean(dr_1)\n    jump_std = np.std(dr_1)\n    large_jump_threshold = jump_mean + 3 * jump_std\n    is_large_jump = dr_1 > large_jump_threshold\n    \n    is_exit_event = (tracer_states[:-1] == 1) & (tracer_states[1:] == 0)\n    is_exit_window = np.zeros_like(is_exit_event, dtype=bool)\n    for n in range(n_tracers):\n        exits = np.where(is_exit_event[:, n])[0]\n        for e in exits:\n            is_exit_window[e:e+6, n] = True\n            \n    total_large_jumps = np.sum(is_large_jump)\n    total_exit_events = np.sum(is_exit_event)\n    large_jumps_at_exit = np.sum(is_large_jump & is_exit_event)\n    large_jumps_near_exit = np.sum(is_large_jump & is_exit_window)\n    \n    print('Total large jumps (>3 std dev): ' + str(total_large_jumps))\n    print('Total exit events (Vortex -> Strain): ' + str(total_exit_events))\n    if total_large_jumps > 0:\n        print('Fraction of large jumps exactly at exit events: ' + str(large_jumps_at_exit / total_large_jumps))\n        print('Fraction of large jumps near (within 5 steps) exit events: ' + str(large_jumps_near_exit / total_large_jumps))\n    if total_exit_events > 0:\n        print('Fraction of exit events producing a large jump exactly at exit: ' + str(large_jumps_at_exit / total_exit_events))\n        print('Fraction of exit events producing a large jump near exit: ' + str(large_jumps_near_exit / total_exit_events))\n        \n    print('Plotting Jump Size Distribution...')\n    plt.figure(figsize=(8, 6))\n    \n    jumps_exit = dr_1[is_exit_event]\n    jumps_strain_general = dr_1[tracer_states[:-1] == 0]\n    \n    jumps_exit = jumps_exit[jumps_exit > 0]\n    jumps_strain_general = jumps_strain_general[jumps_strain_general > 0]\n    \n    if len(jumps_exit) > 0 and min(jumps_exit) < max(jumps_exit) and len(jumps_strain_general) > 0 and min(jumps_strain_general) < max(jumps_strain_general):\n        counts_e, bins_e = np.histogram(jumps_exit, bins=np.logspace(np.log10(min(jumps_exit)), np.log10(max(jumps_exit)), 50), density=True)\n        counts_s, bins_s = np.histogram(jumps_strain_general, bins=np.logspace(np.log10(min(jumps_strain_general)), np.log10(max(jumps_strain_general)), 50), density=True)\n        \n        bc_e = (bins_e[:-1] + bins_e[1:]) / 2\n        bc_s = (bins_s[:-1] + bins_s[1:]) / 2\n        \n        valid_e = counts_e > 0\n        valid_s = counts_s > 0\n        \n        plt.loglog(bc_e[valid_e], counts_e[valid_e], 'ro', alpha=0.6, label='Vortex-Exit Jumps')\n        plt.loglog(bc_s[valid_s], counts_s[valid_s], 'bo', alpha=0.6, label='Strain Jumps')\n        \n        tail_e = (bc_e > np.percentile(jumps_exit, 90)) & valid_e\n        tail_s = (bc_s > np.percentile(jumps_strain_general, 95)) & valid_s\n        \n        if np.sum(tail_e) > 3:\n            try:\n                popt_e, _ = curve_fit(lambda x, a, alpha: a * x**(-alpha), bc_e[tail_e], counts_e[tail_e], p0=[1.0, 3.0])\n                plt.loglog(bc_e[tail_e], popt_e[0] * bc_e[tail_e]**(-popt_e[1]), 'r-', linewidth=2, label='Exit Fit: $\\\\alpha$=' + str(round(popt_e[1], 2)))\n                print('Estimated power-law exponent for Vortex-Exit jumps: ' + str(popt_e[1]))\n            except Exception as e:\n                print('Could not fit exit jumps: ' + str(e))\n        if np.sum(tail_s) > 3:\n            try:\n                popt_s, _ = curve_fit(lambda x, a, alpha: a * x**(-alpha), bc_s[tail_s], counts_s[tail_s], p0=[1.0, 3.0])\n                plt.loglog(bc_s[tail_s], popt_s[0] * bc_s[tail_s]**(-popt_s[1]), 'b-', linewidth=2, label='Strain Fit: $\\\\alpha$=' + str(round(popt_s[1], 2)))\n                print('Estimated power-law exponent for Strain jumps: ' + str(popt_s[1]))\n            except Exception as e:\n                print('Could not fit strain jumps: ' + str(e))\n            \n    plt.xlabel('Jump Size $\\\\Delta x$ [length]')\n    plt.ylabel('PDF $P(\\\\Delta x)$ [1/length]')\n    plt.title('Jump Size Distribution: Vortex-Exit vs Strain')\n    plt.legend()\n    plt.grid(True)\n    plt.tight_layout()\n    filepath_jump = 'data/jump_size_dist_5_' + timestamp + '.png'\n    plt.savefig(filepath_jump, dpi=300)\n    print('Plot saved to ' + filepath_jump)\n    plt.close()\n\nif __name__ == '__main__':\n    plot_conditional_stats()\n```",
+    "timestamp": "2026-05-18 16:59:18",
+    "cost": {
+      "Agent": [
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.093166
+      ],
+      "Prompt Tokens": [
+        21059
+      ],
+      "Completion Tokens": [
+        4254
+      ],
+      "Total Tokens": [
+        25313
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe script loads the conditional statistics computed in Step 3 and generates the required plots to analyze the differences between the Vortex and Strain populations. 1. Conditional MSD: Plots the Mean Squared Displacement for tracers predominantly in the Vortex vs. Strain regions. The units are [length^2] vs [time]. 2. Conditional Displacement PDFs: Plots the standardized displacement distributions for both populations at selected lag times, overlaid with a reference Gaussian. This highlights whether heavy tails are intrinsic to the strain field or a consequence of vortex trapping. 3. Trapping Times Distribution: Plots the PDF of trapping event durations [time] and fits a power-law to the tail to estimate the exponent mu, which is a key parameter in the Continuous-Time Random Walk (CTRW) model. 4. Normalized Velocity Increment PDFs: Plots the distributions of velocity increments normalized by the local RMS velocity for both regions, checking for direct Levy-flight mechanisms. 5. Jump Size Distribution: Recomputes the exact exit events (transitions from Vortex to Strain) and plots the jump size [length] distribution for these specific Vortex-exit events alongside general Strain-region displacements. Power-law fits are overlaid to compare their tail exponents. Finally, the script recomputes and prints detailed statistics regarding the correlation between large jumps (>3 standard deviations) and vortex exit events to quantify the ejection mechanism.\n\n**Modifications:**\n\nAdded the required if __name__ == '__main__': block, ensured all file paths point to the data/ directory, removed LaTeX rendering in plots, and ensured all imports are correct.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_5.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nimport time\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.optimize import curve_fit\n\nplt.rcParams['text.usetex'] = False\n\ndef plot_conditional_stats():\n    timestamp = str(int(time.time()))\n    data_dir = 'data'\n    \n    print('Loading conditional statistics...')\n    cond_stats = np.load(os.path.join(data_dir, 'conditional_stats.npz'))\n    lags = cond_stats['lags']\n    msd_vortex = cond_stats['msd_vortex']\n    msd_strain = cond_stats['msd_strain']\n    trapping_times = cond_stats['trapping_times']\n    \n    dt_traj = 0.4\n    tau_vals = lags * dt_traj\n    \n    print('Plotting Conditional MSD...')\n    plt.figure(figsize=(8, 6))\n    plt.loglog(tau_vals, msd_vortex, 'r-', linewidth=2, label='Vortex')\n    plt.loglog(tau_vals, msd_strain, 'b-', linewidth=2, label='Strain')\n    plt.xlabel('Lag time tau [time]')\n    plt.ylabel('Mean Squared Displacement (MSD) [length^2]')\n    plt.title('Conditional MSD: Vortex vs Strain')\n    plt.legend()\n    plt.grid(True)\n    plt.tight_layout()\n    filepath_msd = os.path.join(data_dir, 'conditional_msd_1_' + timestamp + '.png')\n    plt.savefig(filepath_msd, dpi=300)\n    print('Plot saved to ' + filepath_msd)\n    plt.close()\n    \n    print('Plotting Conditional Displacement PDFs...')\n    selected_lags = [10, 50, 100, 200]\n    fig, axes = plt.subplots(2, 2, figsize=(12, 10))\n    axes = axes.flatten()\n    for i, lag in enumerate(selected_lags):\n        ax = axes[i]\n        dx_v = cond_stats['vortex_x_' + str(lag)]\n        dx_s = cond_stats['strain_x_' + str(lag)]\n        dx_v = dx_v[~np.isnan(dx_v)]\n        dx_s = dx_s[~np.isnan(dx_s)]\n        if len(dx_v) > 0:\n            dx_v_std = (dx_v - np.mean(dx_v)) / np.std(dx_v)\n            ax.hist(dx_v_std, bins=100, density=True, alpha=0.5, color='red', label='Vortex', log=True)\n        if len(dx_s) > 0:\n            dx_s_std = (dx_s - np.mean(dx_s)) / np.std(dx_s)\n            ax.hist(dx_s_std, bins=100, density=True, alpha=0.5, color='blue', label='Strain', log=True)\n        x_vals = np.linspace(-5, 5, 200)\n        ax.plot(x_vals, 1/np.sqrt(2*np.pi)*np.exp(-0.5*x_vals**2), 'k--', label='Gaussian')\n        ax.set_title('Lag = ' + str(lag) + ' steps')\n        ax.set_xlabel('Standardized Displacement X')\n        ax.set_ylabel('PDF')\n        ax.set_ylim(bottom=1e-5)\n        ax.legend()\n    plt.tight_layout()\n    filepath_disp = os.path.join(data_dir, 'conditional_disp_pdfs_2_' + timestamp + '.png')\n    plt.savefig(filepath_disp, dpi=300)\n    print('Plot saved to ' + filepath_disp)\n    plt.close()\n    \n    print('Plotting Trapping Times Distribution...')\n    plt.figure(figsize=(8, 6))\n    trapping_times = trapping_times[trapping_times > 0]\n    if len(trapping_times) > 0 and min(trapping_times) < max(trapping_times):\n        counts, bins = np.histogram(trapping_times, bins=np.logspace(np.log10(min(trapping_times)), np.log10(max(trapping_times)), 50), density=True)\n        bin_centers = (bins[:-1] + bins[1:]) / 2\n        valid = counts > 0\n        plt.loglog(bin_centers[valid], counts[valid], 'ko', label='Data')\n        tail_mask = (bin_centers > 10) & valid\n        if np.sum(tail_mask) > 3:\n            try:\n                popt, _ = curve_fit(lambda x, a, mu: a * x**(-mu), bin_centers[tail_mask], counts[tail_mask], p0=[1.0, 1.5])\n                mu_est = popt[1]\n                plt.loglog(bin_centers[tail_mask], popt[0] * bin_centers[tail_mask]**(-mu_est), 'r-', linewidth=2, label='Fit: mu=' + str(round(mu_est, 2)))\n                print('Estimated trapping time power-law exponent mu: ' + str(mu_est))\n            except Exception as e:\n                print('Could not fit trapping times: ' + str(e))\n    plt.xlabel('Trapping Time tau [time]')\n    plt.ylabel('PDF P(tau) [1/time]')\n    plt.title('Trapping Time Distribution')\n    plt.legend()\n    plt.grid(True)\n    plt.tight_layout()\n    filepath_trap = os.path.join(data_dir, 'trapping_times_pdf_3_' + timestamp + '.png')\n    plt.savefig(filepath_trap, dpi=300)\n    print('Plot saved to ' + filepath_trap)\n    plt.close()\n    \n    print('Plotting Normalized Velocity Increment PDFs...')\n    vel_lags = [1, 10, 50]\n    fig, axes = plt.subplots(1, 3, figsize=(15, 5))\n    for i, lag in enumerate(vel_lags):\n        ax = axes[i]\n        dv_v = cond_stats['vortex_' + str(lag)]\n        dv_s = cond_stats['strain_' + str(lag)]\n        dv_v = dv_v[~np.isnan(dv_v)]\n        dv_s = dv_s[~np.isnan(dv_s)]\n        if len(dv_v) > 0:\n            ax.hist(dv_v, bins=100, density=True, alpha=0.5, color='red', label='Vortex', log=True)\n        if len(dv_s) > 0:\n            ax.hist(dv_s, bins=100, density=True, alpha=0.5, color='blue', label='Strain', log=True)\n        ax.set_title('Lag = ' + str(lag) + ' steps')\n        ax.set_xlabel('Normalized Velocity Increment dv/v_rms')\n        ax.set_ylabel('PDF')\n        ax.set_ylim(bottom=1e-6)\n        ax.legend()\n    plt.tight_layout()\n    filepath_vel = os.path.join(data_dir, 'normalized_vel_incs_4_' + timestamp + '.png')\n    plt.savefig(filepath_vel, dpi=300)\n    print('Plot saved to ' + filepath_vel)\n    plt.close()\n    \n    print('Recomputing detailed statistics for large jumps and vortex exit events...')\n    traj_x = np.load('/home/node/work/projects/ns2d_levy_v1/data/traj_x.npy')\n    traj_y = np.load('/home/node/work/projects/ns2d_levy_v1/data/traj_y.npy')\n    t_traj = np.load('/home/node/work/projects/ns2d_levy_v1/data/t_traj.npy')\n    snap_times = np.load('/home/node/work/projects/ns2d_levy_v1/data/snap_times.npy')\n    eulerian = np.load(os.path.join(data_dir, 'eulerian_stats.npz'))\n    Q_fields = eulerian['Q_fields']\n    n_steps, n_tracers = traj_x.shape\n    N = 256\n    L = 2 * np.pi\n    dx = L / N\n    nearest_snap_idx = np.array([np.argmin(np.abs(snap_times - t)) for t in t_traj])\n    grid_x = np.floor(traj_x / dx).astype(int) % N\n    grid_y = np.floor(traj_y / dx).astype(int) % N\n    tracer_states = np.zeros((n_steps, n_tracers), dtype=int)\n    for t_idx in range(n_steps):\n        s_idx = nearest_snap_idx[t_idx]\n        q_vals = Q_fields[s_idx, grid_y[t_idx], grid_x[t_idx]]\n        tracer_states[t_idx] = (q_vals < 0).astype(int)\n    unwrapped_x = np.load(os.path.join(data_dir, 'unwrapped_traj_x.npy'))\n    unwrapped_y = np.load(os.path.join(data_dir, 'unwrapped_traj_y.npy'))\n    dx_1 = unwrapped_x[1:] - unwrapped_x[:-1]\n    dy_1 = unwrapped_y[1:] - unwrapped_y[:-1]\n    dr_1 = np.sqrt(dx_1**2 + dy_1**2)\n    jump_mean = np.mean(dr_1)\n    jump_std = np.std(dr_1)\n    large_jump_threshold = jump_mean + 3 * jump_std\n    is_large_jump = dr_1 > large_jump_threshold\n    is_exit_event = (tracer_states[:-1] == 1) & (tracer_states[1:] == 0)\n    is_exit_window = np.zeros_like(is_exit_event, dtype=bool)\n    for n in range(n_tracers):\n        exits = np.where(is_exit_event[:, n])[0]\n        for e in exits:\n            is_exit_window[e:e+6, n] = True\n    total_large_jumps = np.sum(is_large_jump)\n    total_exit_events = np.sum(is_exit_event)\n    large_jumps_at_exit = np.sum(is_large_jump & is_exit_event)\n    large_jumps_near_exit = np.sum(is_large_jump & is_exit_window)\n    print('Total large jumps (>3 std dev): ' + str(total_large_jumps))\n    print('Total exit events (Vortex -> Strain): ' + str(total_exit_events))\n    if total_large_jumps > 0:\n        print('Fraction of large jumps exactly at exit events: ' + str(large_jumps_at_exit / total_large_jumps))\n        print('Fraction of large jumps near (within 5 steps) exit events: ' + str(large_jumps_near_exit / total_large_jumps))\n    if total_exit_events > 0:\n        print('Fraction of exit events producing a large jump exactly at exit: ' + str(large_jumps_at_exit / total_exit_events))\n        print('Fraction of exit events producing a large jump near exit: ' + str(large_jumps_near_exit / total_exit_events))\n    print('Plotting Jump Size Distribution...')\n    plt.figure(figsize=(8, 6))\n    jumps_exit = dr_1[is_exit_event]\n    jumps_strain_general = dr_1[tracer_states[:-1] == 0]\n    jumps_exit = jumps_exit[jumps_exit > 0]\n    jumps_strain_general = jumps_strain_general[jumps_strain_general > 0]\n    if len(jumps_exit) > 0 and min(jumps_exit) < max(jumps_exit) and len(jumps_strain_general) > 0 and min(jumps_strain_general) < max(jumps_strain_general):\n        counts_e, bins_e = np.histogram(jumps_exit, bins=np.logspace(np.log10(min(jumps_exit)), np.log10(max(jumps_exit)), 50), density=True)\n        counts_s, bins_s = np.histogram(jumps_strain_general, bins=np.logspace(np.log10(min(jumps_strain_general)), np.log10(max(jumps_strain_general)), 50), density=True)\n        bc_e = (bins_e[:-1] + bins_e[1:]) / 2\n        bc_s = (bins_s[:-1] + bins_s[1:]) / 2\n        valid_e = counts_e > 0\n        valid_s = counts_s > 0\n        plt.loglog(bc_e[valid_e], counts_e[valid_e], 'ro', alpha=0.6, label='Vortex-Exit Jumps')\n        plt.loglog(bc_s[valid_s], counts_s[valid_s], 'bo', alpha=0.6, label='Strain Jumps')\n        tail_e = (bc_e > np.percentile(jumps_exit, 90)) & valid_e\n        tail_s = (bc_s > np.percentile(jumps_strain_general, 95)) & valid_s\n        if np.sum(tail_e) > 3:\n            try:\n                popt_e, _ = curve_fit(lambda x, a, alpha: a * x**(-alpha), bc_e[tail_e], counts_e[tail_e], p0=[1.0, 3.0])\n                plt.loglog(bc_e[tail_e], popt_e[0] * bc_e[tail_e]**(-popt_e[1]), 'r-', linewidth=2, label='Exit Fit: alpha=' + str(round(popt_e[1], 2)))\n                print('Estimated power-law exponent for Vortex-Exit jumps: ' + str(popt_e[1]))\n            except Exception as e:\n                print('Could not fit exit jumps: ' + str(e))\n        if np.sum(tail_s) > 3:\n            try:\n                popt_s, _ = curve_fit(lambda x, a, alpha: a * x**(-alpha), bc_s[tail_s], counts_s[tail_s], p0=[1.0, 3.0])\n                plt.loglog(bc_s[tail_s], popt_s[0] * bc_s[tail_s]**(-popt_s[1]), 'b-', linewidth=2, label='Strain Fit: alpha=' + str(round(popt_s[1], 2)))\n                print('Estimated power-law exponent for Strain jumps: ' + str(popt_s[1]))\n            except Exception as e:\n                print('Could not fit strain jumps: ' + str(e))\n    plt.xlabel('Jump Size Delta x [length]')\n    plt.ylabel('PDF P(Delta x) [1/length]')\n    plt.title('Jump Size Distribution: Vortex-Exit vs Strain')\n    plt.legend()\n    plt.grid(True)\n    plt.tight_layout()\n    filepath_jump = os.path.join(data_dir, 'jump_size_dist_5_' + timestamp + '.png')\n    plt.savefig(filepath_jump, dpi=300)\n    print('Plot saved to ' + filepath_jump)\n    plt.close()\n\nif __name__ == '__main__':\n    plot_conditional_stats()\n```",
+    "timestamp": "2026-05-18 16:59:30",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.008475749999999999
+      ],
+      "Prompt Tokens": [
+        7581
+      ],
+      "Completion Tokens": [
+        4387
+      ],
+      "Total Tokens": [
+        11968
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \nLoading conditional statistics...\nPlotting Conditional MSD...\nPlot saved to data/conditional_msd_1_1779123571.png\nPlotting Conditional Displacement PDFs...\nPlot saved to data/conditional_disp_pdfs_2_1779123571.png\nPlotting Trapping Times Distribution...\nEstimated trapping time power-law exponent mu: 0.56806119237215\nPlot saved to data/trapping_times_pdf_3_1779123571.png\nPlotting Normalized Velocity Increment PDFs...\nPlot saved to data/normalized_vel_incs_4_1779123571.png\nRecomputing detailed statistics for large jumps and vortex exit events...\nTotal large jumps (>3 std dev): 144391\nTotal exit events (Vortex -> Strain): 3916\nFraction of large jumps exactly at exit events: 0.0012881689301964803\nFraction of large jumps near (within 5 steps) exit events: 0.007583575153576054\nFraction of exit events producing a large jump exactly at exit: 0.047497446373850866\nFraction of exit events producing a large jump near exit: 0.2796220633299285\nPlotting Jump Size Distribution...\nEstimated power-law exponent for Vortex-Exit jumps: 2.5868426223645455\nCould not fit strain jumps: Optimal parameters not found: Number of calls to function has reached maxfev = 600.\nPlot saved to data/jump_size_dist_5_1779123571.png\n",
+    "timestamp": "2026-05-18 16:59:36",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \nLoading conditional statistics...\nPlotting Conditional MSD...\nPlot saved to data/conditional_msd_1_1779123571.png\nPlotting Conditional Displacement PDFs...\nPlot saved to data/conditional_disp_pdfs_2_1779123571.png\nPlotting Trapping Times Distribution...\nEstimated trapping time power-law exponent mu: 0.56806119237215\nPlot saved to data/trapping_times_pdf_3_1779123571.png\nPlotting Normalized Velocity Increment PDFs...\nPlot saved to data/normalized_vel_incs_4_1779123571.png\nRecomputing detailed statistics for large jumps and vortex exit events...\nTotal large jumps (>3 std dev): 144391\nTotal exit events (Vortex -> Strain): 3916\nFraction of large jumps exactly at exit events: 0.0012881689301964803\nFraction of large jumps near (within 5 steps) exit events: 0.007583575153576054\nFraction of exit events producing a large jump exactly at exit: 0.047497446373850866\nFraction of exit events producing a large jump near exit: 0.2796220633299285\nPlotting Jump Size Distribution...\nEstimated power-law exponent for Vortex-Exit jumps: 2.5868426223645455\nCould not fit strain jumps: Optimal parameters not found: Number of calls to function has reached maxfev = 600.\nPlot saved to data/jump_size_dist_5_1779123571.png\n",
+    "timestamp": "2026-05-18 16:59:36",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-05-18 16:59:36",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0003385
+      ],
+      "Prompt Tokens": [
+        1174
+      ],
+      "Completion Tokens": [
+        30
+      ],
+      "Total Tokens": [
+        1204
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution successful. 5 new image(s) generated.\n\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 5\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n\nPlease review the generated images and provide feedback.",
+    "timestamp": "2026-05-18 16:59:36",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "image_reviewer",
+    "content": "[{'type': 'text', 'text': '**Needs Revision:** yes\\n\\n**Issues:**\\n- **Image 0 (Conditional MSD):** The plot shows that the MSD for \\'Vortex\\' and \\'Strain\\' populations are identical. This is highly suspicious given the distinct physical environments. It suggests a bug in the conditional averaging logic (e.g., averaging over all particles regardless of the condition, or the condition itself not being applied correctly to the trajectories).\\n- **Image 1 (Conditional Displacement PDFs):** The PDFs for \\'Vortex\\' and \\'Strain\\' are also nearly identical across all lags. This reinforces the suspicion of a bug in the conditional data selection or processing.\\n- **Image 2 (Trapping Time Distribution):** The data is extremely noisy, making the power-law fit unreliable. The fit is performed over a very narrow range (approx. 1 decade) and does not capture the trend of the data well.\\n- **Image 3 (Velocity Increment PDFs):** The x-axis is labeled \"Normalized Velocity Increment dv/v_rms\", but the values are extremely small (e.g., 0 to 0.02 for lag 1, 0 to 0.6 for lag 50). If normalized by the global RMS velocity, these values seem incorrect for velocity increments. They might be normalized by something else, or there\\'s a scaling error.\\n- **Image 4 (Jump Size Distribution):** The plot shows the PDF of jump sizes, but the data for \\'Vortex-Exit Jumps\\' is very sparse and noisy. The power-law fit is applied to a very small number of points at the extreme tail, making the exponent estimate questionable. The \\'Strain Jumps\\' distribution has a strange shape, increasing over several decades before dropping, which is unusual for a displacement PDF.\\n\\n**Suggestions:**\\n- **Image 0 & 1:** Thoroughly review the code that separates the trajectories into \\'Vortex\\' and \\'Strain\\' populations. Ensure that the masking and averaging are applied correctly to the displacement data for each group. The results should show distinct behaviors.\\n- **Image 2:** To reduce noise, consider using wider bins for the histogram or a kernel density estimator. Re-evaluate the range over which the power-law fit is applied. If the data is inherently this noisy, acknowledge the uncertainty in the fit.\\n- **Image 3:** Check the normalization of the velocity increments. Ensure `v_rms` is calculated correctly (e.g., as the root-mean-square of the velocity magnitude over all particles and times). The normalized values should be of order 1.\\n- **Image 4:** For the \\'Vortex-Exit Jumps\\', try to accumulate more events if possible, or use a different visualization method (e.g., CDF) that is less sensitive to noise in the tail. For \\'Strain Jumps\\', investigate why the distribution increases with jump size; it should generally be monotonically decreasing. Ensure the PDF is normalized correctly.\\n\\n**Summary:**\\nThe generated images have significant issues, primarily suggesting bugs in the conditional data analysis (Images 0 & 1) and problems with data quality/processing (Images 2, 3, & 4). The identical MSDs and PDFs for different physical regions are non-physical and must be corrected. The noise levels and scaling in other plots also need to be addressed for the results to be scientifically meaningful.', 'extras': {'signature': 'EjQKMgEMOdbHcp1mz9+9IC+wrBeVqlttpnvkN+vN4x9+RBzLD9cEluVTAV9UWkFHUeIQDp4D'}}]",
+    "timestamp": "2026-05-18 16:59:45",
+    "cost": {
+      "Agent": [
+        "image_reviewer"
+      ],
+      "Model": [
+        "gemini-3.1-flash-image-preview"
+      ],
+      "Cost": [
+        0.000480525
+      ],
+      "Prompt Tokens": [
+        3591
+      ],
+      "Completion Tokens": [
+        704
+      ],
+      "Total Tokens": [
+        4295
+      ]
+    }
+  },
+  {
+    "name": "image_review_recorder",
+    "content": "",
+    "timestamp": "2026-05-18 16:59:47",
+    "cost": {
+      "Agent": [
+        "image_review_recorder"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0013435
+      ],
+      "Prompt Tokens": [
+        1126
+      ],
+      "Completion Tokens": [
+        708
+      ],
+      "Total Tokens": [
+        1834
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Image review: Max attempts (2) reached. Step marked as complete.\n\nSummary: The generated images have significant issues, primarily suggesting bugs in the conditional data analysis (Images 0 & 1) and problems with data quality/processing (Images 2, 3, & 4). The identical MSDs and PDFs for different physical regions are non-physical and must be corrected. The noise levels and scaling in other plots also need to be addressed for the results to be scientifically meaningful.",
+    "timestamp": "2026-05-18 16:59:47",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-05-18 16:59:48",
+    "cost": {
+      "Agent": [
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00435825
+      ],
+      "Prompt Tokens": [
+        17325
+      ],
+      "Completion Tokens": [
+        18
+      ],
+      "Total Tokens": [
+        17343
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 5 out of 6.\n\n**Sub-task:** Plot Conditional Statistics, Trapping Times, and Jump Distributions\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Load the results saved in Step 3.\n- Plot the conditional displacement PDFs and conditional MSD, comparing the Vortex and Strain populations.\n- Plot the distribution of trapping times $P(\\tau_{trap})$ and perform a power-law fit to estimate the exponent $\\mu$.\n- Plot the normalized velocity increment PDFs for both regions.\n- Plot the jump size distribution $P(\\Delta x)$ for both Vortex-exit events and general Strain-region displacements on the same axes, with power-law fits overlaid.\n- Print detailed statistics regarding the correlation between large jumps and vortex exit events.\n- Save all plots as high-resolution PNGs.\n\n**Step status:** completed \u2705\n\n**Code status:** success\n\n**Step iteration:** 0/10\n        ",
+    "timestamp": "2026-05-18 16:59:48",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "terminator",
+    "content": "TERMINATE",
+    "timestamp": "2026-05-18 16:59:48",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
   }
 ]
